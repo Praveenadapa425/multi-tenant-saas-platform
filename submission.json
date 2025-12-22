@@ -38,6 +38,20 @@
             "name": "Project Beta",
             "description": "Second demo project"
           }
+        ],
+        "tasks": [
+          {
+            "title": "Task 1",
+            "description": "First task for Project Alpha",
+            "status": "todo",
+            "priority": "medium"
+          },
+          {
+            "title": "Task 2",
+            "description": "Second task for Project Alpha",
+            "status": "in_progress",
+            "priority": "high"
+          }
         ]
       }
     ]

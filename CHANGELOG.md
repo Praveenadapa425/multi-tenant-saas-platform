@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2025-12-22
 
 ### Added
 - Initial project structure
@@ -15,13 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker configuration
 - Documentation files
 - Test files
+- Security policies
+- Contribution guidelines
 
 ### Changed
-
-### Deprecated
-
-### Removed
+- Enhanced documentation with additional details
+- Improved API endpoint documentation
 
 ### Fixed
+- Minor documentation typos
 
 ### Security
+- Implemented JWT-based authentication
+- Added role-based access control
+- Data isolation between tenants

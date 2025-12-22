@@ -1,5 +1,9 @@
 # API Documentation
 
+**Version**: 1.0
+**Date**: December 22, 2025
+**Author**: Multi-Tenant SaaS Team
+
 ## Authentication
 
 ### Register Tenant

@@ -1,5 +1,9 @@
 # Product Requirements Document (PRD)
 
+**Version**: 1.0
+**Date**: December 22, 2025
+**Author**: Multi-Tenant SaaS Team
+
 ## User Personas
 
 ### 1. Super Admin

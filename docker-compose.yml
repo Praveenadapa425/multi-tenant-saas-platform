@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: saas_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      POSTGRES_EXTENSIONS: uuid-ossp
     ports:
       - "5432:5432"  # Fixed: external:internal
     volumes:
@@ -52,6 +53,8 @@ services:
       REACT_APP_API_URL: http://backend:5000/api  # Use service name, not localhost
     depends_on:
       backend:
+        condition: service_healthy
+      database:
         condition: service_healthy
 
 volumes:

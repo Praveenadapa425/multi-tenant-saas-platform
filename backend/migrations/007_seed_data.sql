@@ -1,5 +1,9 @@
 -- Seed data for the multi-tenant SaaS platform
 
+-- Create super admin user
+INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active)
+VALUES ('00000000-0000-0000-0000-000000000001', NULL, 'superadmin@system.com', '$2b$10$rV3J./PzGBkXH5GI5pS/seJaqG9.wBdqMsMhcW1.n.D.bEz9RFpIy', 'Super Admin', 'super_admin', true);
+
 -- Create a demo tenant
 INSERT INTO tenants (id, name, subdomain, status, subscription_plan, max_users, max_projects)
 VALUES ('10000000-0000-0000-0000-000000000001', 'Demo Company', 'demo', 'active', 'pro', 25, 15);

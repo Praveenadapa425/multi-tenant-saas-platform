@@ -33,8 +33,31 @@ The application follows a multi-tenancy shared database, shared schema approach 
 
 ## Quick Start with Docker
 
+To run the complete application with all services (database, backend API, and frontend):
+
 ```bash
 docker-compose up -d
+```
+
+This command will:
+1. Start the PostgreSQL database on port 5432
+2. Start the Node.js backend API on port 5000
+3. Start the React frontend on port 3000
+4. Automatically run database migrations and seed data
+
+Once the services are running, you can access:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
+- Database: postgresql://postgres:postgres@localhost:5432/saas_db
+
+To stop all services:
+```bash
+docker-compose down
+```
+
+To view logs:
+```bash
+docker-compose logs -f
 ```
 
 This will start all services:
@@ -42,7 +65,19 @@ This will start all services:
 - Backend API: Node.js/Express on port 5000
 - Frontend: React on port 3000
 
-## Manual Setup
+## Running with Docker (Recommended)
+
+The recommended way to run this application is using Docker, which will automatically handle all dependencies, database setup, and service coordination.
+
+1. Clone the repository
+2. Run the application:
+   ```bash
+   docker-compose up -d
+   ```
+
+## Manual Setup (Alternative)
+
+If you prefer to run the services manually:
 
 1. Clone the repository
 2. Install backend dependencies:

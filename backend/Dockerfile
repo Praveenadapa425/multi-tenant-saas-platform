@@ -30,6 +30,10 @@ RUN adduser -S nextjs -u 1001
 RUN chown -R nextjs:nodejs /app
 USER nextjs
 
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Expose port
 EXPOSE 5000
 
@@ -38,4 +42,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node healthcheck.js
 
 # Start the application
-CMD ["node", "src/server.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]

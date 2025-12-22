@@ -18,7 +18,21 @@ const pool = new Pool({
 async function runMigration(client, filePath) {
   const sql = fs.readFileSync(filePath, 'utf8');
   console.log(`Running migration: ${path.basename(filePath)}`);
-  await client.query(sql);
+  
+  // Split SQL into individual statements (handle multiple statements in one file)
+  const statements = sql.split(';').filter(stmt => stmt.trim() !== '');
+  
+  for (const statement of statements) {
+    if (statement.trim() !== '') {
+      try {
+        await client.query(statement);
+      } catch (error) {
+        console.error(`Error executing statement in ${path.basename(filePath)}:`, error.message);
+        throw error;
+      }
+    }
+  }
+  
   console.log(`Completed migration: ${path.basename(filePath)}`);
 }
 

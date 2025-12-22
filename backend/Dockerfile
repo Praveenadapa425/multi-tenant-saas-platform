@@ -16,6 +16,10 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=5000
+
 # Copy dependencies from builder stage
 COPY --from=builder /app/node_modules ./node_modules
 

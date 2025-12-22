@@ -115,6 +115,16 @@ Database migrations are located in the `migrations/` directory. Run migrations u
 - `npm test`: Run tests
 - `npm run migrate`: Run database migrations
 
+## Production Deployment
+
+When deploying to production:
+
+1. Ensure all environment variables are properly set
+2. Use a strong JWT secret (at least 32 characters)
+3. Change default database credentials
+4. Enable SSL for database connections if required
+5. Review and adjust database connection pool settings based on expected load
+
 ## License
 
 This project is licensed under the MIT License.

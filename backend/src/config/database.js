@@ -10,9 +10,11 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'saas_db',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
-  max: 20, // Maximum number of clients in the pool
+  max: process.env.NODE_ENV === 'production' ? 30 : 20, // Increase pool size in production
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
   connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  // Enable SSL in production if required
+  ssl: process.env.DB_SSL_MODE === 'require' ? { rejectUnauthorized: false } : false
 });
 
 // Test the database connection

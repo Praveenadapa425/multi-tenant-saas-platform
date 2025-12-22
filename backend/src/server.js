@@ -8,13 +8,21 @@ const { pool } = require('./config/database');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy for production
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Middleware
 app.use(helmet());
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
-app.use(morgan('combined'));
+// Use combined format for production, dev format for development
+const logFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
+app.use(morgan(logFormat));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -25,12 +33,21 @@ app.get('/api/health', async (req, res) => {
     await client.query('SELECT 1');
     client.release();
     
-    res.status(200).json({
+    // Return detailed health information in production
+    const healthInfo = {
       status: 'ok',
       database: 'connected',
-      timestamp: new Date().toISOString()
-    });
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    };
+    
+    if (process.env.NODE_ENV !== 'production') {
+      healthInfo.memoryUsage = process.memoryUsage();
+    }
+    
+    res.status(200).json(healthInfo);
   } catch (error) {
+    console.error('Health check failed:', error);
     res.status(500).json({
       status: 'error',
       database: 'disconnected',

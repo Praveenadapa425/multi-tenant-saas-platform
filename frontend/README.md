@@ -63,6 +63,15 @@ In the project directory, you can run:
 - `npm run build`: Builds the app for production
 - `npm run eject`: Removes the single build dependency
 
+## Production Deployment
+
+When deploying to production:
+
+1. Ensure the `REACT_APP_API_URL` environment variable points to your production backend
+2. The Dockerfile is configured for production with multi-stage builds
+3. Nginx is configured with security headers and gzip compression
+4. Static assets are cached for better performance
+
 ## Learn More
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

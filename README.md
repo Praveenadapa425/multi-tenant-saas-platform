@@ -194,6 +194,53 @@ cd frontend
 npm test
 ```
 
+## Production Deployment
+
+### Environment Configuration
+
+1. Copy `.env.production` to `.env` and update the values for your production environment:
+   ```bash
+   cp .env.production .env
+   # Edit .env file with your production values
+   ```
+
+2. Important production variables to update:
+   - `DB_PASSWORD`: Use a strong, unique password for the database
+   - `JWT_SECRET`: MUST be changed to a secure secret key (at least 32 characters)
+   - `REACT_APP_API_URL`: Update to your production domain
+
+### Security Considerations
+
+1. **Change all default passwords** before deployment
+2. **Generate a new JWT secret** for production
+3. **Use HTTPS** in production (update URLs accordingly)
+4. **Review and update CORS settings** in backend configuration
+5. **Enable database SSL** if required by setting `DB_SSL_MODE=require`
+
+### Deployment Steps
+
+1. Ensure Docker and Docker Compose are installed on your production server
+2. Copy the entire project directory to your production server
+3. Configure environment variables as described above
+4. Run the application:
+   ```bash
+   docker-compose up -d
+   ```
+
+5. Monitor the logs to ensure all services start correctly:
+   ```bash
+   docker-compose logs -f
+   ```
+
+### Scaling Considerations
+
+For production deployments with higher traffic:
+
+1. Adjust database connection pool settings in `backend/src/config/database.js`
+2. Consider using a reverse proxy like NGINX or Traefik for load balancing
+3. Implement proper monitoring and alerting
+4. Set up automated backups for the database volume
+
 ## Contributing
 
 1. Fork the repository

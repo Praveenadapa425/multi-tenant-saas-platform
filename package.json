@@ -1,0 +1,47 @@
+{
+  "name": "multi-tenant-saas-platform",
+  "version": "1.0.0",
+  "description": "A production-ready, multi-tenant SaaS application where multiple organizations can register, manage their teams, create projects, and track tasks with proper data isolation, role-based access control, and subscription management.",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm start",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "test": "concurrently \"npm run test:backend\" \"npm run test:frontend\"",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "build": "cd frontend && npm run build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs"
+  },
+  "keywords": [
+    "saas",
+    "multi-tenant",
+    "project-management",
+    "task-management",
+    "nodejs",
+    "react",
+    "postgresql",
+    "docker"
+  ],
+  "author": "Multi-Tenant SaaS Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/multi-tenant-saas-platform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/username/multi-tenant-saas-platform/issues"
+  },
+  "homepage": "https://github.com/username/multi-tenant-saas-platform#readme"
+}

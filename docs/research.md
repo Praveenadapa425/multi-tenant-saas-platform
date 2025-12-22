@@ -2,6 +2,8 @@
 
 ## Multi-Tenancy Analysis
 
+Multi-tenancy is a software architecture pattern where a single instance of an application serves multiple tenants (customers or organizations). Each tenant's data is isolated and remains invisible to other tenants, while sharing the same application infrastructure.
+
 Multi-tenancy is an architectural approach where a single instance of software serves multiple customers (tenants). Each tenant's data is isolated and remains invisible to other tenants. There are three primary approaches to implementing multi-tenancy:
 
 ### 1. Shared Database, Shared Schema (Single Database, Single Schema)

@@ -1,5 +1,9 @@
 # System Architecture
 
+**Version**: 1.0
+**Date**: December 22, 2025
+**Author**: Multi-Tenant SaaS Team
+
 ## System Architecture Diagram
 
 ```

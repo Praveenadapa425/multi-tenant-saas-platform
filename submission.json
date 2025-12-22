@@ -41,16 +41,24 @@
         ],
         "tasks": [
           {
-            "title": "Task 1",
-            "description": "First task for Project Alpha",
+            "title": "Design homepage mockup",
+            "description": "Create high-fidelity design",
             "status": "todo",
-            "priority": "medium"
+            "priority": "high",
+            "assignedTo": "user1@demo.com"
           },
           {
-            "title": "Task 2",
-            "description": "Second task for Project Alpha",
+            "title": "Implement user authentication",
+            "description": "Set up JWT-based authentication",
             "status": "in_progress",
-            "priority": "high"
+            "priority": "high",
+            "assignedTo": "user2@demo.com"
+          },
+          {
+            "title": "Write documentation",
+            "description": "Create user guides and API documentation",
+            "status": "todo",
+            "priority": "medium"
           }
         ]
       }

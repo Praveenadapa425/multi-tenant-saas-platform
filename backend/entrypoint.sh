@@ -3,6 +3,13 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
+# Install build dependencies and rebuild bcrypt (in case it wasn't built properly)
+echo "Installing build dependencies and rebuilding bcrypt..."
+apt-get update && apt-get install -y python3 make g++ postgresql-client
+
+# Rebuild bcryptjs for the current platform
+npm rebuild bcryptjs
+
 # Wait for database to be ready
 echo "Waiting for database to be ready..."
 until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do

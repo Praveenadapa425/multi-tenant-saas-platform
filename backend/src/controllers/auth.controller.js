@@ -2,101 +2,104 @@ const { pool } = require('../config/database');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { generateToken } = require('../utils/jwt');
 const { logAction } = require('../utils/auditLogger');
-const Tenant = require('../models/tenant.model');
-const User = require('../models/user.model');
+const { sanitizeString, sanitizeObject } = require('../utils/sanitize');
+const logger = require('../utils/logger');
 
 /**
  * Register a new tenant with admin user
  * POST /api/auth/register-tenant
  */
 async function registerTenant(req, res) {
-  const { tenantName, subdomain, adminEmail, adminPassword, adminFullName } = req.body;
+  const client = await pool.connect();
   
   try {
+    const { tenantName, subdomain, adminEmail, adminPassword, adminFullName } = req.body;
+    
+    await client.query('BEGIN');
+    
     // Check if subdomain already exists
-    const existingTenant = await Tenant.findBySubdomain(subdomain);
-    if (existingTenant) {
+    const existingTenant = await client.query(
+      'SELECT id FROM tenants WHERE subdomain = $1',
+      [subdomain]
+    );
+    
+    if (existingTenant.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({
         success: false,
         message: 'Subdomain already exists'
       });
     }
     
-    // Check if admin email already exists in this tenant (though tenant doesn't exist yet, good to check globally)
-    const existingUser = await User.findByEmail(adminEmail);
-    if (existingUser && existingUser.tenant_id) {
+    // Check if email already exists
+    const existingEmail = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [adminEmail]
+    );
+    
+    if (existingEmail.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({
         success: false,
-        message: 'Email already exists for another tenant'
+        message: 'Email already registered'
       });
     }
     
     // Hash password
     const hashedPassword = await hashPassword(adminPassword);
     
-    // Use transaction to ensure both tenant and admin user are created
-    const client = await pool.connect();
+    // Create tenant with free plan defaults
+    const tenantResult = await client.query(
+      `INSERT INTO tenants (name, subdomain, status, subscription_plan, max_users, max_projects)
+       VALUES ($1, $2, 'active', 'free', 5, 3)
+       RETURNING id, name, subdomain`,
+      [tenantName, subdomain]
+    );
     
-    try {
-      await client.query('BEGIN');
-      
-      // Create tenant
-      const tenant = await Tenant.create({
-        name: tenantName,
-        subdomain: subdomain,
-        status: 'active',
-        subscriptionPlan: 'free'
-      });
-      
-      // Create admin user
-      const adminUser = await User.create({
+    const tenant = tenantResult.rows[0];
+    
+    // Create admin user
+    const userResult = await client.query(
+      `INSERT INTO users (tenant_id, email, password_hash, full_name, role, is_active)
+       VALUES ($1, $2, $3, $4, 'tenant_admin', true)
+       RETURNING id, email, full_name, role`,
+      [tenant.id, adminEmail, hashedPassword, adminFullName]
+    );
+    
+    const adminUser = userResult.rows[0];
+    
+    // Log action
+    await client.query(
+      `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [tenant.id, adminUser.id, 'CREATE_TENANT', 'tenant', tenant.id, req.ip]
+    );
+    
+    await client.query('COMMIT');
+    
+    res.status(201).json({
+      success: true,
+      message: 'Tenant registered successfully',
+      data: {
         tenantId: tenant.id,
-        email: adminEmail,
-        passwordHash: hashedPassword,
-        fullName: adminFullName,
-        role: 'tenant_admin',
-        isActive: true
-      });
-      
-      await client.query('COMMIT');
-      
-      // Log action
-      await logAction({
-        tenantId: tenant.id,
-        userId: adminUser.id,
-        action: 'CREATE_TENANT',
-        entityType: 'tenant',
-        entityId: tenant.id,
-        ipAddress: req.ip
-      });
-      
-      res.status(201).json({
-        success: true,
-        message: 'Tenant registered successfully',
-        data: {
-          tenantId: tenant.id,
-          subdomain: tenant.subdomain,
-          adminUser: {
-            id: adminUser.id,
-            email: adminUser.email,
-            fullName: adminUser.full_name,
-            role: adminUser.role
-          }
+        subdomain: tenant.subdomain,
+        adminUser: {
+          id: adminUser.id,
+          email: adminUser.email,
+          fullName: adminUser.full_name,
+          role: adminUser.role
         }
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+      }
+    });
   } catch (error) {
-    console.error('Error registering tenant:', error);
+    await client.query('ROLLBACK');
+    console.error('Tenant registration error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to register tenant',
-      error: process.env.NODE_ENV === 'development' ? error.message : {}
+      message: 'Tenant registration failed'
     });
+  } finally {
+    client.release();
   }
 }
 
@@ -105,28 +108,77 @@ async function registerTenant(req, res) {
  * POST /api/auth/login
  */
 async function login(req, res) {
-  const { email, password, tenantSubdomain } = req.body;
-  
   try {
-    // Find tenant by subdomain
-    const tenant = await Tenant.findBySubdomain(tenantSubdomain);
-    if (!tenant) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tenant not found'
-      });
+    const { email, password, tenantSubdomain } = req.body;
+    
+    // First, try to find super_admin user (with NULL tenant_id)
+    let userResult = await pool.query(
+      'SELECT id, email, password_hash, full_name, role, is_active, tenant_id FROM users WHERE email = $1 AND role = $2 AND tenant_id IS NULL',
+      [email, 'super_admin']
+    );
+    
+    let user = null;
+    let tenant = null;
+    
+    if (userResult.rows.length > 0) {
+      // Found super_admin user
+      user = userResult.rows[0];
+      
+      // For super_admin, we can use any tenant for the context
+      const tenantResult = await pool.query(
+        'SELECT id, status FROM tenants WHERE subdomain = $1',
+        [tenantSubdomain]
+      );
+      
+      if (tenantResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tenant not found'
+        });
+      }
+      
+      tenant = tenantResult.rows[0];
+      
+      if (tenant.status !== 'active') {
+        return res.status(403).json({
+          success: false,
+          message: 'Tenant account is not active'
+        });
+      }
+    } else {
+      // Find tenant by subdomain for regular users
+      const tenantResult = await pool.query(
+        'SELECT id, status FROM tenants WHERE subdomain = $1',
+        [tenantSubdomain]
+      );
+      
+      if (tenantResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tenant not found'
+        });
+      }
+      
+      tenant = tenantResult.rows[0];
+      
+      if (tenant.status !== 'active') {
+        return res.status(403).json({
+          success: false,
+          message: 'Tenant account is not active'
+        });
+      }
+      
+      // Find regular user by email and tenant
+      userResult = await pool.query(
+        'SELECT id, email, password_hash, full_name, role, is_active, tenant_id FROM users WHERE email = $1 AND tenant_id = $2',
+        [email, tenant.id]
+      );
+      
+      if (userResult.rows.length > 0) {
+        user = userResult.rows[0];
+      }
     }
     
-    // Check if tenant is active
-    if (tenant.status !== 'active') {
-      return res.status(403).json({
-        success: false,
-        message: 'Tenant account is not active'
-      });
-    }
-    
-    // Find user by email and tenant
-    const user = await User.findByEmailAndTenant(email, tenant.id);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -134,7 +186,6 @@ async function login(req, res) {
       });
     }
     
-    // Check if user is active
     if (!user.is_active) {
       return res.status(403).json({
         success: false,
@@ -159,36 +210,31 @@ async function login(req, res) {
     });
     
     // Log action
-    await logAction({
-      tenantId: user.tenant_id,
-      userId: user.id,
-      action: 'USER_LOGIN',
-      entityType: 'user',
-      entityId: user.id,
-      ipAddress: req.ip
-    });
+    await pool.query(
+      `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [user.tenant_id, user.id, 'USER_LOGIN', 'user', user.id, req.ip]
+    );
     
     res.status(200).json({
       success: true,
       data: {
-        user: {
+        user: sanitizeObject({
           id: user.id,
           email: user.email,
           fullName: user.full_name,
           role: user.role,
-          isActive: user.is_active,
           tenantId: user.tenant_id
-        },
+        }),
         token: token,
-        expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+        expiresIn: 86400
       }
     });
   } catch (error) {
-    console.error('Error during login:', error);
+    logger.error('Login error', error);
     res.status(500).json({
       success: false,
-      message: 'Login failed',
-      error: process.env.NODE_ENV === 'development' ? error.message : {}
+      message: 'Login failed'
     });
   }
 }
@@ -199,29 +245,50 @@ async function login(req, res) {
  */
 async function getCurrentUser(req, res) {
   try {
-    // Get tenant info
-    let tenant = null;
-    if (req.tenantId) {
-      tenant = await Tenant.findById(req.tenantId);
+    const userId = req.user.id;
+    
+    // Get user and tenant info
+    const result = await pool.query(
+      `SELECT u.id, u.email, u.full_name, u.role, u.is_active, u.tenant_id,
+              t.id as tenant_id_check, t.name, t.subdomain, t.subscription_plan, t.max_users, t.max_projects
+       FROM users u
+       LEFT JOIN tenants t ON u.tenant_id = t.id
+       WHERE u.id = $1`,
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
     }
+    
+    const userData = result.rows[0];
     
     res.status(200).json({
       success: true,
       data: {
-        id: req.user.id,
-        email: req.user.email,
-        fullName: req.user.full_name,
-        role: req.user.role,
-        isActive: req.user.is_active,
-        tenant: tenant
+        id: userData.id,
+        email: userData.email,
+        fullName: userData.full_name,
+        role: userData.role,
+        isActive: userData.is_active,
+        tenant: userData.tenant_id ? {
+          id: userData.tenant_id,
+          name: userData.name,
+          subdomain: userData.subdomain,
+          subscriptionPlan: userData.subscription_plan,
+          maxUsers: userData.max_users,
+          maxProjects: userData.max_projects
+        } : null
       }
     });
   } catch (error) {
-    console.error('Error getting current user:', error);
+    console.error('Get current user error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get user information',
-      error: process.env.NODE_ENV === 'development' ? error.message : {}
+      message: 'Failed to get user information'
     });
   }
 }
@@ -233,27 +300,21 @@ async function getCurrentUser(req, res) {
 async function logout(req, res) {
   try {
     // Log action
-    await logAction({
-      tenantId: req.tenantId,
-      userId: req.userId,
-      action: 'USER_LOGOUT',
-      entityType: 'user',
-      entityId: req.userId,
-      ipAddress: req.ip
-    });
+    await pool.query(
+      `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.user.tenantId, req.user.id, 'USER_LOGOUT', 'user', req.user.id, req.ip]
+    );
     
-    // For JWT-only auth, we just return success
-    // Client should remove the token from storage
     res.status(200).json({
       success: true,
       message: 'Logged out successfully'
     });
   } catch (error) {
-    console.error('Error during logout:', error);
+    console.error('Logout error:', error);
     res.status(500).json({
       success: false,
-      message: 'Logout failed',
-      error: process.env.NODE_ENV === 'development' ? error.message : {}
+      message: 'Logout failed'
     });
   }
 }

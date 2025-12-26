@@ -43,5 +43,3 @@ Our platform adheres to various compliance standards:
 1. **GDPR**: Privacy by design and data protection principles
 2. **SOC 2**: Security, availability, processing integrity, confidentiality, and privacy
 3. **ISO 27001**: Information security management
-
-For any security-related questions or concerns, please contact us at security@example.com.

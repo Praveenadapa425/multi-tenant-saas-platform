@@ -104,7 +104,7 @@ const createUserValidation = [
   body('role')
     .optional()
     .isIn(['user', 'tenant_admin'])
-    .withMessage('Role must be either "user" or "tenant_admin"'),
+    .withMessage('Role must be "user" or "tenant_admin"'),
   
   handleValidationErrors
 ];

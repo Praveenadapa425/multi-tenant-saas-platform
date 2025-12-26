@@ -1,7 +1,14 @@
+# Multi-Tenant SaaS Platform - Docker Compose Configuration
+
+# This file defines three services: database, backend, and frontend
+
+# All services can be started with: docker-compose up -d
+
 version: '3.8'
 
 services:
-  # Database Service
+  # PostgreSQL Database Service
+  # Stores all tenant data with strict isolation via tenant_id
   database:
     image: postgres:15
     container_name: database
@@ -9,53 +16,74 @@ services:
       POSTGRES_DB: ${DB_NAME:-saas_db}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_EXTENSIONS: uuid-ossp
+      POSTGRES_EXTENSIONS: uuid-ossp  # Enable UUID extension
     ports:
-      - "5432:5432"  # Fixed: external:internal
+      - "5432:5432"  # Fixed port mapping (external:internal)
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data  # Persistent storage
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+    networks:
+      - saas-network
 
-  # Backend API Service
+  # Backend API Service (Node.js/Express)
+  # Runs migrations and seeds automatically on startup
   backend:
     build: ./backend
     container_name: backend
     ports:
-      - "5000:5000"  # Fixed: external:internal
+      - "5000:5000"  # Fixed port mapping (external:internal)
     environment:
+      NODE_ENV: development
+      PORT: 5000
+      # Database connection uses service name 'database', not 'localhost'
       DB_HOST: ${DB_HOST:-database}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-saas_db}
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-change-in-production}
-      FRONTEND_URL: http://frontend:3000  # Use service name, not localhost
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}  # Must match database password
+      # JWT configuration
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-change-in-production}  # Change in production
+      JWT_EXPIRES_IN: 24h
+      # CORS: Frontend URL uses service name 'frontend', not 'localhost'
+      FRONTEND_URL: http://frontend:3000
     depends_on:
       database:
-        condition: service_healthy
+        condition: service_healthy  # Wait for database to be ready
+    networks:
+      - saas-network
     healthcheck:
-      test: ["CMD", "node", "healthcheck.js"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # Frontend Service
+  # Frontend Service (React/Vite)
+  # Serves UI on port 3000
   frontend:
     build: ./frontend
     container_name: frontend
     ports:
-      - "3000:3000"  # Fixed: external:internal
+      - "3000:3000"  # Fixed: external port 3000 → internal port 3000
     environment:
-      REACT_APP_API_URL: http://backend:5000/api  # Use service name, not localhost
+      # API URL for browser access from host machine
+      VITE_API_URL: http://localhost:5000/api
+      REACT_APP_API_URL: http://localhost:5000/api
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_healthy  # Wait for backend to be ready
       database:
-        condition: service_healthy
+        condition: service_healthy  # Wait for database to be ready
+    networks:
+      - saas-network
 
+# Persistent volume for database data
 volumes:
   db_data:
+
+networks:
+  saas-network:
+    driver: bridge

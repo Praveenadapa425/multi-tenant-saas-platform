@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/auth.controller');
+const { authenticate } = require('../middleware/auth.middleware');
 const { tenantRegistrationValidation, userLoginValidation } = require('../middleware/validation.middleware');
 
 // Tenant Registration
@@ -13,10 +14,10 @@ router.post('/login', userLoginValidation, authController.login);
 
 // Get Current User (requires authentication)
 // GET /api/auth/me
-router.get('/me', authController.getCurrentUser);
+router.get('/me', authenticate, authController.getCurrentUser);
 
 // User Logout (requires authentication)
 // POST /api/auth/logout
-router.post('/logout', authController.logout);
+router.post('/logout', authenticate, authController.logout);
 
 module.exports = router;

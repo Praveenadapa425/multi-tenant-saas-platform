@@ -4,14 +4,21 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const { pool } = require('./config/database');
+const logger = require('./utils/logger');
+const {
+  globalLimiter,
+  authLimiter,
+  registerLimiter,
+  passwordResetLimiter,
+  apiLimiter,
+  uploadLimiter
+} = require('./middleware/rateLimiter');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Trust proxy for production
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
+// Trust proxy for Docker environment
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());
@@ -20,13 +27,18 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200
 }));
+
 // Use combined format for production, dev format for development
 const logFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
 app.use(morgan(logFormat));
+
+// Apply global rate limiting to all requests
+app.use(globalLimiter);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint
+// Health check endpoint (no rate limiting)
 app.get('/api/health', async (req, res) => {
   try {
     const client = await pool.connect();
@@ -47,7 +59,7 @@ app.get('/api/health', async (req, res) => {
     
     res.status(200).json(healthInfo);
   } catch (error) {
-    console.error('Health check failed:', error);
+    logger.error('Health check failed', error);
     res.status(500).json({
       status: 'error',
       database: 'disconnected',
@@ -56,19 +68,27 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Routes
-app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/tenants', require('./routes/tenants.routes'));
-app.use('/api/users', require('./routes/users.routes'));
-app.use('/api/projects', require('./routes/projects.routes'));
-app.use('/api/tasks', require('./routes/tasks.routes'));
+// Auth routes with strict rate limiting
+// - login: 5 attempts per 15 min (successful attempts not counted)
+// - register-tenant: 3 attempts per 15 min
+// - logout: standard auth rate limit
+app.use('/api/auth/login', authLimiter, require('./routes/auth.routes'));
+app.use('/api/auth/register-tenant', registerLimiter, require('./routes/auth.routes'));
+app.use('/api/auth/reset-password', passwordResetLimiter, require('./routes/auth.routes'));
+app.use('/api/auth', authLimiter, require('./routes/auth.routes'));
+
+// API routes with standard rate limiting
+app.use('/api/tenants', apiLimiter, require('./routes/tenants.routes'));
+app.use('/api/users', apiLimiter, require('./routes/users.routes'));
+app.use('/api/projects', apiLimiter, require('./routes/projects.routes'));
+app.use('/api/tasks', apiLimiter, require('./routes/tasks.routes'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
+  logger.error('Unhandled error', err);
+  res.status(err.status || 500).json({
     success: false,
-    message: 'Something went wrong!',
+    message: err.message || 'Something went wrong!',
     error: process.env.NODE_ENV === 'development' ? err.message : {}
   });
 });
@@ -82,7 +102,7 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info(`Server running on port ${PORT}`, { port: PORT });
 });
 
 module.exports = app;

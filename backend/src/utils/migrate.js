@@ -19,18 +19,12 @@ async function runMigration(client, filePath) {
   const sql = fs.readFileSync(filePath, 'utf8');
   console.log(`Running migration: ${path.basename(filePath)}`);
   
-  // Split SQL into individual statements (handle multiple statements in one file)
-  const statements = sql.split(';').filter(stmt => stmt.trim() !== '');
-  
-  for (const statement of statements) {
-    if (statement.trim() !== '') {
-      try {
-        await client.query(statement);
-      } catch (error) {
-        console.error(`Error executing statement in ${path.basename(filePath)}:`, error.message);
-        throw error;
-      }
-    }
+  // Execute the entire SQL file content as a single query to handle functions with $$ delimiters properly
+  try {
+    await client.query(sql);
+  } catch (error) {
+    console.error(`Error executing ${path.basename(filePath)}:`, error.message);
+    throw error;
   }
   
   console.log(`Completed migration: ${path.basename(filePath)}`);
@@ -49,6 +43,16 @@ async function runMigrations() {
     const migrationFiles = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql'))
       .sort();
+    
+    // Check if tables already exist to avoid duplicate creation
+    const { rows } = await client.query(
+      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tenants');"
+    );
+    
+    if (rows[0].exists) {
+      console.log('Tables already exist, skipping migrations');
+      return;
+    }
     
     console.log(`Found ${migrationFiles.length} migration files`);
     

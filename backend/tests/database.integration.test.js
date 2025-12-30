@@ -14,26 +14,25 @@ const pool = new Pool({
 
 describe('Database Integration Tests', () => {
   beforeAll(async () => {
-    // Clean up and prepare test data
-    await pool.query('DELETE FROM tasks WHERE id::text LIKE \'test_%\'');
-    await pool.query('DELETE FROM projects WHERE id::text LIKE \'test_%\'');
-    await pool.query('DELETE FROM users WHERE id::text LIKE \'test_%\'');
-    await pool.query('DELETE FROM tenants WHERE id::text LIKE \'test_%\'');
+    // Clean up and prepare test data - remove any test records that might exist from previous runs
+    // Since we're using pure UUIDs now, we can't use LIKE with 'test_%' pattern
+    // Instead, we'll clean up based on other identifiers where possible
+    // For now, just clear all test data without using LIKE on UUID columns
+    await pool.query('DELETE FROM tasks WHERE title LIKE \'%Test Task%\' OR title LIKE \'%ISO Task%\'');
+    await pool.query('DELETE FROM projects WHERE name LIKE \'%Test Project%\' OR name LIKE \'%ISO Project%\'');
+    await pool.query('DELETE FROM users WHERE email LIKE \'%testuser%\' OR email LIKE \'%project%\' OR email LIKE \'%task%\' OR email LIKE \'%iso%\'');
+    await pool.query('DELETE FROM tenants WHERE subdomain LIKE \'%test%\' OR subdomain LIKE \'%iso%\'');
   });
 
   afterAll(async () => {
-    // Clean up test data
-    await pool.query('DELETE FROM tasks WHERE id::text LIKE \'test_%\'');
-    await pool.query('DELETE FROM projects WHERE id::text LIKE \'test_%\'');
-    await pool.query('DELETE FROM users WHERE id::text LIKE \'test_%\'');
-    await pool.query('DELETE FROM tenants WHERE id::text LIKE \'test_%\'');
+    // No additional cleanup needed since each test section cleans up after itself
     await pool.end();
   });
 
   describe('Tenant Operations', () => {
     it('should create, read, update, and delete a tenant', async () => {
       // Create tenant
-      const tenantId = `test_tenant_${uuidv4()}`; // Use proper UUID
+      const tenantId = uuidv4(); // Use pure UUID without prefix
       const tenantName = 'Test Tenant 1';
       const subdomain = 'test1';
       
@@ -75,7 +74,7 @@ describe('Database Integration Tests', () => {
     
     beforeAll(async () => {
       // Create a test tenant first
-      tenantId = `test_user_tenant_${uuidv4()}`; // Use proper UUID
+      tenantId = uuidv4(); // Use pure UUID without prefix
       await pool.query(`
         INSERT INTO tenants (id, name, subdomain, status, subscription_plan, max_users, max_projects) 
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -89,7 +88,7 @@ describe('Database Integration Tests', () => {
 
     it('should create, read, update, and delete a user', async () => {
       // Create user
-      const userId = `test_user_${uuidv4()}`; // Use proper UUID
+      const userId = uuidv4(); // Use pure UUID without prefix
       const email = 'testuser@example.com';
       const passwordHash = await bcrypt.hash('Password123!', 10);
       
@@ -131,8 +130,8 @@ describe('Database Integration Tests', () => {
     
     beforeAll(async () => {
       // Create test tenant and user
-      tenantId = `test_project_tenant_${uuidv4()}`; // Use proper UUID
-      userId = `test_project_user_${uuidv4()}`; // Use proper UUID
+      tenantId = uuidv4(); // Use pure UUID without prefix
+      userId = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
         INSERT INTO tenants (id, name, subdomain, status, subscription_plan, max_users, max_projects) 
@@ -148,14 +147,14 @@ describe('Database Integration Tests', () => {
 
     afterAll(async () => {
       // Clean up
-      await pool.query('DELETE FROM projects WHERE id::text LIKE \'test_%\'');
+      await pool.query('DELETE FROM projects WHERE name LIKE \'%Test Project%\' OR name LIKE \'%ISO Project%\'');
       await pool.query('DELETE FROM users WHERE id = $1', [userId]);
       await pool.query('DELETE FROM tenants WHERE id = $1', [tenantId]);
     });
 
     it('should create, read, update, and delete a project', async () => {
       // Create project
-      const projectId = `test_project_${uuidv4()}`; // Use proper UUID
+      const projectId = uuidv4(); // Use pure UUID without prefix
       const projectName = 'Test Project 1';
       
       const createResult = await pool.query(`
@@ -196,9 +195,9 @@ describe('Database Integration Tests', () => {
     
     beforeAll(async () => {
       // Create test tenant, user, and project
-      tenantId = `test_task_tenant_${uuidv4()}`; // Use proper UUID
-      userId = `test_task_user_${uuidv4()}`; // Use proper UUID
-      projectId = `test_task_project_${uuidv4()}`; // Use proper UUID
+      tenantId = uuidv4(); // Use pure UUID without prefix
+      userId = uuidv4(); // Use pure UUID without prefix
+      projectId = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
         INSERT INTO tenants (id, name, subdomain, status, subscription_plan, max_users, max_projects) 
@@ -219,7 +218,7 @@ describe('Database Integration Tests', () => {
 
     afterAll(async () => {
       // Clean up
-      await pool.query('DELETE FROM tasks WHERE id::text LIKE \'test_%\'');
+      await pool.query('DELETE FROM tasks WHERE title LIKE \'%Test Task%\' OR title LIKE \'%ISO Task%\'');
       await pool.query('DELETE FROM projects WHERE id = $1', [projectId]);
       await pool.query('DELETE FROM users WHERE id = $1', [userId]);
       await pool.query('DELETE FROM tenants WHERE id = $1', [tenantId]);
@@ -227,7 +226,7 @@ describe('Database Integration Tests', () => {
 
     it('should create, read, update, and delete a task', async () => {
       // Create task
-      const taskId = `test_task_${uuidv4()}`; // Use proper UUID
+      const taskId = uuidv4(); // Use pure UUID without prefix
       const taskTitle = 'Test Task 1';
       
       const createResult = await pool.query(`
@@ -271,8 +270,8 @@ describe('Database Integration Tests', () => {
     
     beforeAll(async () => {
       // Create two test tenants
-      tenant1Id = `tenant_isolation_1_${uuidv4()}`; // Use proper UUID
-      tenant2Id = `tenant_isolation_2_${uuidv4()}`; // Use proper UUID
+      tenant1Id = uuidv4(); // Use pure UUID without prefix
+      tenant2Id = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
         INSERT INTO tenants (id, name, subdomain, status, subscription_plan, max_users, max_projects) 
@@ -286,8 +285,8 @@ describe('Database Integration Tests', () => {
       
       // Create users in each tenant
       const passwordHash = await bcrypt.hash('Password123!', 10);
-      user1Id = `iso_user_1_${uuidv4()}`; // Use proper UUID
-      user2Id = `iso_user_2_${uuidv4()}`; // Use proper UUID
+      user1Id = uuidv4(); // Use pure UUID without prefix
+      user2Id = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
         INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
@@ -300,8 +299,8 @@ describe('Database Integration Tests', () => {
       `, [user2Id, tenant2Id, 'iso2@example.com', passwordHash, 'ISO', 'User2', 'user', 'active']);
       
       // Create projects in each tenant
-      project1Id = `iso_project_1_${uuidv4()}`; // Use proper UUID
-      project2Id = `iso_project_2_${uuidv4()}`; // Use proper UUID
+      project1Id = uuidv4(); // Use pure UUID without prefix
+      project2Id = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
         INSERT INTO projects (id, tenant_id, user_id, name, description) 
@@ -314,8 +313,8 @@ describe('Database Integration Tests', () => {
       `, [project2Id, tenant2Id, user2Id, 'ISO Project 2', 'ISO Project 2']);
       
       // Create tasks in each tenant
-      task1Id = `iso_task_1_${uuidv4()}`; // Use proper UUID
-      task2Id = `iso_task_2_${uuidv4()}`; // Use proper UUID
+      task1Id = uuidv4(); // Use pure UUID without prefix
+      task2Id = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
         INSERT INTO tasks (id, tenant_id, project_id, assigned_user_id, title, description, status, priority) 

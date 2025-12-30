@@ -101,8 +101,11 @@ app.use('*', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`, { port: PORT });
-});
+// Only start server if not running in test environment
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`, { port: PORT });
+  });
+}
 
 module.exports = app;

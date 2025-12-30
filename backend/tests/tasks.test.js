@@ -45,7 +45,7 @@ describe('Task API Endpoints', () => {
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'assigned-user-id', tenant_id: 'tenant-id' }] }) // Check assigned user
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'task-id', title: 'Test Task', project_id: 'project-id' }] }); // Insert task
+        .mockResolvedValueOnce({ rows: [{ id: 'task-id', title: 'Test Task', description: 'Test Description', project_id: 'project-id', tenant_id: 'tenant-id', status: 'todo', priority: 'medium', assigned_to: 'user-id', created_at: new Date(), updated_at: new Date() }] }); // Insert task
       
       const response = await request(app)
         .post('/api/projects/project-id/tasks')
@@ -54,7 +54,7 @@ describe('Task API Endpoints', () => {
         .expect(201);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data.task.title).toBe(taskData.title);
+      expect(response.body.data.title).toBe(taskData.title);
     });
 
     it('should return 400 for invalid task data', async () => {
@@ -122,6 +122,8 @@ describe('Task API Endpoints', () => {
         .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }) // Check project
       pool.query
         .mockResolvedValueOnce({ rows: mockTasks }); // Get tasks
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Count query
       
       const response = await request(app)
         .get('/api/projects/project-id/tasks')
@@ -144,6 +146,10 @@ describe('Task API Endpoints', () => {
       // Mock getProjectTasks queries
       pool.query
         .mockResolvedValueOnce({ rows: [mockProject] }); // Project from different tenant
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Get tasks (empty because project check will fail)
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }); // Count query
       
       const response = await request(app)
         .get('/api/projects/project-id/tasks')

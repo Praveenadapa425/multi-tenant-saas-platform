@@ -1,14 +1,15 @@
 const request = require('supertest');
-const app = require('../src/server');
-const { pool } = require('../src/config/database');
 const jwt = require('jsonwebtoken');
 
-// Mock the database pool
+// Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn()
+    query: jest.fn(() => Promise.resolve({ rows: [] }))
   }
 }));
+
+const app = require('../src/server');
+const { pool } = require('../src/config/database');
 
 describe('Tenant API Endpoints', () => {
   const validToken = jwt.sign(
@@ -152,6 +153,9 @@ describe('Tenant API Endpoints', () => {
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [{ id: 'tenant-id', name: 'Old Name' }] }); // Get tenant
+      // Mock audit log insertion
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Audit log
       
       const response = await request(app)
         .put('/api/tenants/tenant-id')
@@ -174,6 +178,9 @@ describe('Tenant API Endpoints', () => {
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Super admin
         .mockResolvedValueOnce({ rows: [{ id: 'other-tenant-id', name: 'Old Name' }] }); // Get tenant
+      // Mock audit log insertion
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Audit log
       
       const response = await request(app)
         .put('/api/tenants/other-tenant-id')

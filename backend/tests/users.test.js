@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 // Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn()
+    query: jest.fn(() => Promise.resolve({ rows: [] }))
   }
 }));
 
@@ -44,9 +44,18 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
-        .mockResolvedValueOnce({ rows: [] }) // Check if email exists
-        .mockResolvedValueOnce({ rows: [{ id: 'new-user-id', email: 'newuser@test.com', tenant_id: 'tenant-id' }] }); // Insert user
+      // Mock addUser queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ max_users: 10 }] }); // Tenant limit check
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '3' }] }); // User count check
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Check if email exists
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'new-user-id', email: 'newuser@test.com', full_name: 'New User', role: 'user', is_active: true, created_at: new Date() }] }); // Insert user
+      // Mock audit log insertion
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Audit log
       
       const response = await request(app)
         .post('/api/users')
@@ -98,8 +107,12 @@ describe('User API Endpoints', () => {
         role: 'user'
       };
       
+      // Mock addUser queries
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
+        .mockResolvedValueOnce({ rows: [{ max_users: 10 }] }); // Tenant limit check
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '3' }] }); // User count check
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'existing-user-id', email: 'existing@test.com' }] }); // Email exists
       
       const response = await request(app)
@@ -122,8 +135,11 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', tenant_id: 'tenant-id' }] }) // Check user
+      // Mock listUsers queries
+      pool.query
         .mockResolvedValueOnce({ rows: mockUsers }); // Get users
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Count query
       
       const response = await request(app)
         .get('/api/users')
@@ -153,8 +169,11 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
+      // Mock listUsersInTenant queries
+      pool.query
         .mockResolvedValueOnce({ rows: mockUsers }); // Get users
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '1' }] }); // Count query
       
       const response = await request(app)
         .get('/api/users/tenants/tenant-id')
@@ -173,8 +192,11 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Check super admin
+      // Mock listUsersInTenant queries for super_admin
+      pool.query
         .mockResolvedValueOnce({ rows: mockUsers }); // Get users
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '1' }] }); // Count query
       
       const response = await request(app)
         .get('/api/users/tenants/other-tenant-id')
@@ -210,8 +232,14 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', tenant_id: 'tenant-id' }] }) // Check user
-        .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'old@test.com' }] }); // Get user
+      // Mock updateUser queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-id' }] }); // Get user to check tenant
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Update user result
+      // Mock audit log insertion
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Audit log
       
       const response = await request(app)
         .put('/api/users/regular-user-id')
@@ -231,8 +259,14 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
-        .mockResolvedValueOnce({ rows: [{ id: 'other-user-id', tenant_id: 'tenant-id' }] }); // Get target user
+      // Mock updateUser queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-id' }] }); // Get user to check tenant
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Update user result
+      // Mock audit log insertion
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Audit log
       
       const response = await request(app)
         .put('/api/users/other-user-id')
@@ -251,8 +285,9 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'user1-id', email: 'user1@test.com', full_name: 'User One', role: 'user', tenant_id: 'tenant1-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'user1-id', tenant_id: 'tenant1-id' }] }) // Check user
-        .mockResolvedValueOnce({ rows: [{ id: 'user2-id', tenant_id: 'tenant2-id' }] }); // Get target user (different tenant)
+      // Mock updateUser queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant2-id' }] }); // Get user to check tenant (different tenant)
       
       const response = await request(app)
         .put('/api/users/user2-id')
@@ -269,8 +304,16 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
-        .mockResolvedValueOnce({ rows: [{ id: 'user-to-delete', tenant_id: 'tenant-id' }] }); // Get user to delete
+      // Mock deleteUser queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-id' }] }); // Get user to delete
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Unassign tasks
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Delete user
+      // Mock audit log insertion
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Audit log
       
       const response = await request(app)
         .delete('/api/users/user-to-delete')
@@ -285,7 +328,9 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', role: 'user', tenant_id: 'tenant-id' }] }); // Check user role
+      // Mock deleteUser queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-id' }] }); // Get user to delete
       
       const response = await request(app)
         .delete('/api/users/other-user')

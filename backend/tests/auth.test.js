@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 // Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn()
+    query: jest.fn(() => Promise.resolve({ rows: [] }))
   }
 }));
 

@@ -1,14 +1,15 @@
 const request = require('supertest');
-const app = require('../src/server');
-const { pool } = require('../src/config/database');
 const jwt = require('jsonwebtoken');
 
-// Mock the database pool
+// Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn()
+    query: jest.fn(() => Promise.resolve({ rows: [] }))
   }
 }));
+
+const app = require('../src/server');
+const { pool } = require('../src/config/database');
 
 describe('Task API Endpoints', () => {
   const validToken = jwt.sign(
@@ -35,10 +36,15 @@ describe('Task API Endpoints', () => {
         assigned_user_id: 'user-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock createTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }) // Check project
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'assigned-user-id', tenant_id: 'tenant-id' }] }) // Check assigned user
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'task-id', title: 'Test Task', project_id: 'project-id' }] }); // Insert task
       
       const response = await request(app)
@@ -62,8 +68,11 @@ describe('Task API Endpoints', () => {
     });
 
     it('should return 404 for non-existent project', async () => {
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock createTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [] }); // Project not found
       
       const response = await request(app)
@@ -81,8 +90,11 @@ describe('Task API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock createTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [mockProject] }); // Project from different tenant
       
       const response = await request(app)
@@ -102,9 +114,13 @@ describe('Task API Endpoints', () => {
         { id: 'task2', title: 'Task 2', status: 'in_progress', project_id: 'project-id' }
       ];
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock getProjectTasks queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }) // Check project
+      pool.query
         .mockResolvedValueOnce({ rows: mockTasks }); // Get tasks
       
       const response = await request(app)
@@ -122,8 +138,11 @@ describe('Task API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock getProjectTasks queries
+      pool.query
         .mockResolvedValueOnce({ rows: [mockProject] }); // Project from different tenant
       
       const response = await request(app)
@@ -142,9 +161,14 @@ describe('Task API Endpoints', () => {
         { id: 'task2', title: 'Task 2', status: 'in_progress', tenant_id: 'tenant-id' }
       ];
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock getTasks queries
+      pool.query
         .mockResolvedValueOnce({ rows: mockTasks }); // Get tasks
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Count query
       
       const response = await request(app)
         .get('/api/tasks')
@@ -169,8 +193,11 @@ describe('Task API Endpoints', () => {
     it('should update task status for authorized user', async () => {
       const statusUpdate = { status: 'in_progress' };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock updateTaskStatus queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id' }] }); // Get task
       
       const response = await request(app)
@@ -198,8 +225,11 @@ describe('Task API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock updateTaskStatus queries
+      pool.query
         .mockResolvedValueOnce({ rows: [mockTask] }); // Task from different tenant
       
       const response = await request(app)
@@ -221,8 +251,11 @@ describe('Task API Endpoints', () => {
         priority: 'high'
       };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock updateTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id' }] }); // Get task
       
       const response = await request(app)
@@ -235,8 +268,11 @@ describe('Task API Endpoints', () => {
     });
 
     it('should return 404 for non-existent task', async () => {
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock updateTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [] }); // Task not found
       
       const response = await request(app)
@@ -254,8 +290,11 @@ describe('Task API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock updateTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [mockTask] }); // Task from different tenant
       
       const response = await request(app)
@@ -270,8 +309,11 @@ describe('Task API Endpoints', () => {
 
   describe('DELETE /api/tasks/:taskId', () => {
     it('should delete task for authorized user', async () => {
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock deleteTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id' }] }); // Get task
       
       const response = await request(app)
@@ -284,8 +326,11 @@ describe('Task API Endpoints', () => {
     });
 
     it('should return 404 for non-existent task', async () => {
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock deleteTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [] }); // Task not found
       
       const response = await request(app)
@@ -302,8 +347,11 @@ describe('Task API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock deleteTask queries
+      pool.query
         .mockResolvedValueOnce({ rows: [mockTask] }); // Task from different tenant
       
       const response = await request(app)

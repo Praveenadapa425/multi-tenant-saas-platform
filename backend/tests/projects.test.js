@@ -37,7 +37,9 @@ describe('Project API Endpoints', () => {
         description: 'Test Description'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [{ id: 'project-id', name: 'Test Project', tenant_id: 'tenant-id' }] }); // Insert project
       
@@ -79,7 +81,9 @@ describe('Project API Endpoints', () => {
         { id: 'project2', name: 'Project 2', description: 'Description 2', tenant_id: 'tenant-id' }
       ];
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: mockProjects }); // Get projects
       
@@ -111,7 +115,9 @@ describe('Project API Endpoints', () => {
         tenant_id: 'tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [mockProject] }); // Get project
       
@@ -132,7 +138,9 @@ describe('Project API Endpoints', () => {
         tenant_id: 'other-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Check super admin
         .mockResolvedValueOnce({ rows: [mockProject] }); // Get project
       
@@ -146,7 +154,9 @@ describe('Project API Endpoints', () => {
     });
 
     it('should return 404 for non-existent project', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [] }); // Project not found
       
@@ -166,7 +176,9 @@ describe('Project API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [mockProject] }); // Get project from different tenant
       
@@ -186,7 +198,9 @@ describe('Project API Endpoints', () => {
         description: 'Updated Description'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }); // Get project
       
@@ -200,7 +214,9 @@ describe('Project API Endpoints', () => {
     });
 
     it('should return 404 for non-existent project', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [] }); // Project not found
       
@@ -220,7 +236,9 @@ describe('Project API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [mockProject] }); // Get project from different tenant
       
@@ -236,7 +254,9 @@ describe('Project API Endpoints', () => {
 
   describe('DELETE /api/projects/:projectId', () => {
     it('should delete project for authorized user', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-id', email: 'admin@test.com', full_name: 'Admin User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'admin-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
         .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }); // Get project
       
@@ -250,7 +270,9 @@ describe('Project API Endpoints', () => {
     });
 
     it('should return 404 for non-existent project', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-id', email: 'admin@test.com', full_name: 'Admin User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'admin-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
         .mockResolvedValueOnce({ rows: [] }); // Project not found
       
@@ -269,7 +291,9 @@ describe('Project API Endpoints', () => {
         tenant_id: 'different-tenant-id'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [mockProject] }); // Get project from different tenant
       

@@ -37,7 +37,7 @@ describe('Authentication API Endpoints', () => {
         email: 'admin@test.com',
         full_name: 'Test Admin',
         role: 'tenant_admin',
-        status: 'active',
+        is_active: true,
         created_at: new Date(),
         updated_at: new Date()
       };
@@ -111,7 +111,7 @@ describe('Authentication API Endpoints', () => {
           password_hash: hashedPassword,
           full_name: 'Test User',
           role: 'user',
-          status: 'active',
+          is_active: true,
           created_at: new Date(),
           updated_at: new Date()
         }]
@@ -142,7 +142,7 @@ describe('Authentication API Endpoints', () => {
           password_hash: hashedPassword,
           full_name: 'Super Admin',
           role: 'super_admin',
-          status: 'active',
+          is_active: true,
           created_at: new Date(),
           updated_at: new Date()
         }]
@@ -180,7 +180,7 @@ describe('Authentication API Endpoints', () => {
           password_hash: hashedPassword,
           full_name: 'Super Admin',
           role: 'super_admin',
-          status: 'active',
+          is_active: true,
           created_at: new Date(),
           updated_at: new Date()
         }]
@@ -249,6 +249,18 @@ describe('Authentication API Endpoints', () => {
         process.env.JWT_SECRET || 'test-secret'
       );
       
+      // Mock authenticate middleware query
+      pool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 'test-user-id',
+            email: 'user@test.com',
+            full_name: 'Test User',
+            role: 'user',
+            tenant_id: 'test-tenant-id',
+            is_active: true
+          }]
+        }); // Authenticate user
       pool.query.mockResolvedValueOnce({
         rows: [{
           id: 'test-user-id',
@@ -288,6 +300,19 @@ describe('Authentication API Endpoints', () => {
         { id: 'test-user-id', tenantId: 'test-tenant-id', role: 'user' },
         process.env.JWT_SECRET || 'test-secret'
       );
+      
+      // Mock authenticate middleware query
+      pool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 'test-user-id',
+            email: 'user@test.com',
+            full_name: 'Test User',
+            role: 'user',
+            tenant_id: 'test-tenant-id',
+            is_active: true
+          }]
+        }); // Authenticate user
       
       const response = await request(app)
         .post('/api/auth/logout')

@@ -311,7 +311,7 @@ async function getCurrentUser(req, res) {
  */
 async function logout(req, res) {
   try {
-    // Log action
+    // Log action - handle super_admin users who have null tenantId
     await pool.query(
       `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, ip_address)
        VALUES ($1, $2, $3, $4, $5, $6)`,

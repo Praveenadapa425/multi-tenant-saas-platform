@@ -45,7 +45,9 @@ describe('Tenant API Endpoints', () => {
         total_tasks: 5
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [mockTenant] }) // Get tenant
         .mockResolvedValueOnce({ rows: [mockStats] }); // Get stats
@@ -79,7 +81,9 @@ describe('Tenant API Endpoints', () => {
         total_tasks: 5
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Check super_admin
         .mockResolvedValueOnce({ rows: [mockTenant] }) // Get tenant
         .mockResolvedValueOnce({ rows: [mockStats] }); // Get stats
@@ -95,7 +99,9 @@ describe('Tenant API Endpoints', () => {
     });
 
     it('should return 403 for unauthorized access to different tenant', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'user', tenant_id: 'other-tenant-id' }] }); // User from different tenant
       
       const response = await request(app)
@@ -108,7 +114,9 @@ describe('Tenant API Endpoints', () => {
     });
 
     it('should return 404 for non-existent tenant', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'super_admin', tenant_id: null }] }) // Super admin
         .mockResolvedValueOnce({ rows: [] }); // Tenant not found
       
@@ -139,7 +147,9 @@ describe('Tenant API Endpoints', () => {
         max_projects: 10
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user
         .mockResolvedValueOnce({ rows: [{ id: 'tenant-id', name: 'Old Name' }] }); // Get tenant
       
@@ -159,7 +169,9 @@ describe('Tenant API Endpoints', () => {
         subscription_plan: 'enterprise'
       };
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Super admin
         .mockResolvedValueOnce({ rows: [{ id: 'other-tenant-id', name: 'Old Name' }] }); // Get tenant
       
@@ -173,7 +185,9 @@ describe('Tenant API Endpoints', () => {
     });
 
     it('should return 403 for unauthorized tenant update', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'user', tenant_id: 'tenant-id' }] }); // Regular user
       
       const response = await request(app)
@@ -186,7 +200,9 @@ describe('Tenant API Endpoints', () => {
     });
 
     it('should return 400 for invalid update data', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }); // Check user
       
       const response = await request(app)
@@ -206,7 +222,9 @@ describe('Tenant API Endpoints', () => {
         { id: 'tenant2', name: 'Tenant 2', subdomain: 'tenant2', status: 'active' }
       ];
       
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin' }] }) // Check user role
         .mockResolvedValueOnce({ rows: mockTenants }); // Get all tenants
       
@@ -220,7 +238,9 @@ describe('Tenant API Endpoints', () => {
     });
 
     it('should return 403 for non-super admin access', async () => {
+      // Mock authenticate middleware query
       pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }); // Regular user
       
       const response = await request(app)

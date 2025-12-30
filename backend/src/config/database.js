@@ -17,14 +17,16 @@ const pool = new Pool({
   ssl: process.env.DB_SSL_MODE === 'require' ? { rejectUnauthorized: false } : false
 });
 
-// Test the database connection
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('Database connection error:', err.stack);
-  } else {
-    console.log('Database connected successfully');
-  }
-});
+// Test the database connection only in non-test environments
+if (process.env.NODE_ENV !== 'test') {
+  pool.query('SELECT NOW()', (err, res) => {
+    if (err) {
+      console.error('Database connection error:', err.stack);
+    } else {
+      console.log('Database connected successfully');
+    }
+  });
+}
 
 module.exports = {
   pool,

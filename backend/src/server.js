@@ -5,14 +5,18 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const { pool } = require('./config/database');
 const logger = require('./utils/logger');
-const {
-  globalLimiter,
-  authLimiter,
-  registerLimiter,
-  passwordResetLimiter,
-  apiLimiter,
-  uploadLimiter
-} = require('./middleware/rateLimiter');
+
+// Conditionally import rate limiters based on environment
+let globalLimiter, authLimiter, registerLimiter, passwordResetLimiter, apiLimiter, uploadLimiter;
+if (process.env.NODE_ENV !== 'test') {
+  const rateLimiterModule = require('./middleware/rateLimiter');
+  globalLimiter = rateLimiterModule.globalLimiter;
+  authLimiter = rateLimiterModule.authLimiter;
+  registerLimiter = rateLimiterModule.registerLimiter;
+  passwordResetLimiter = rateLimiterModule.passwordResetLimiter;
+  apiLimiter = rateLimiterModule.apiLimiter;
+  uploadLimiter = rateLimiterModule.uploadLimiter;
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,7 +36,7 @@ app.use(cors({
 const logFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
 app.use(morgan(logFormat));
 
-// Apply global rate limiting to all requests (skip in test environment)
+// Apply rate limiting based on environment
 if (process.env.NODE_ENV !== 'test') {
   app.use(globalLimiter);
 }
@@ -70,10 +74,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Auth routes with strict rate limiting
-// - login: 5 attempts per 15 min (successful attempts not counted)
-// - register-tenant: 3 attempts per 15 min
-// - logout: standard auth rate limit
+// Auth routes with rate limiting based on environment
 if (process.env.NODE_ENV !== 'test') {
   app.use('/api/auth/login', authLimiter, require('./routes/auth.routes'));
   app.use('/api/auth/register-tenant', registerLimiter, require('./routes/auth.routes'));
@@ -86,7 +87,7 @@ if (process.env.NODE_ENV !== 'test') {
   app.use('/api/auth', require('./routes/auth.routes'));
 }
 
-// API routes with standard rate limiting
+// API routes with rate limiting based on environment
 if (process.env.NODE_ENV !== 'test') {
   app.use('/api/tenants', apiLimiter, require('./routes/tenants.routes'));
   app.use('/api/users', apiLimiter, require('./routes/users.routes'));

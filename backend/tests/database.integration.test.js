@@ -93,10 +93,10 @@ describe('Database Integration Tests', () => {
       const passwordHash = await bcrypt.hash('Password123!', 10);
       
       const createResult = await pool.query(`
-        INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+        INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7) 
         RETURNING *
-      `, [userId, tenantId, email, passwordHash, 'Test', 'User', 'user', 'active']);
+      `, [userId, tenantId, email, passwordHash, 'Test User', 'user', true]);
       
       expect(createResult.rows).toHaveLength(1);
       expect(createResult.rows[0].email).toBe(email);
@@ -140,9 +140,9 @@ describe('Database Integration Tests', () => {
       
       const passwordHash = await bcrypt.hash('Password123!', 10);
       await pool.query(`
-        INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [userId, tenantId, 'project@example.com', passwordHash, 'Project', 'User', 'user', 'active']);
+        INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [userId, tenantId, 'project@example.com', passwordHash, 'Project User', 'user', true]);
     });
 
     afterAll(async () => {
@@ -158,7 +158,7 @@ describe('Database Integration Tests', () => {
       const projectName = 'Test Project 1';
       
       const createResult = await pool.query(`
-        INSERT INTO projects (id, tenant_id, user_id, name, description) 
+        INSERT INTO projects (id, tenant_id, created_by, name, description) 
         VALUES ($1, $2, $3, $4, $5) 
         RETURNING *
       `, [projectId, tenantId, userId, projectName, 'Test project description']);
@@ -206,12 +206,12 @@ describe('Database Integration Tests', () => {
       
       const passwordHash = await bcrypt.hash('Password123!', 10);
       await pool.query(`
-        INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [userId, tenantId, 'task@example.com', passwordHash, 'Task', 'User', 'user', 'active']);
+        INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [userId, tenantId, 'task@example.com', passwordHash, 'Task User', 'user', true]);
       
       await pool.query(`
-        INSERT INTO projects (id, tenant_id, user_id, name, description) 
+        INSERT INTO projects (id, tenant_id, created_by, name, description) 
         VALUES ($1, $2, $3, $4, $5)
       `, [projectId, tenantId, userId, 'Test Task Project', 'Test task project']);
     });
@@ -230,7 +230,7 @@ describe('Database Integration Tests', () => {
       const taskTitle = 'Test Task 1';
       
       const createResult = await pool.query(`
-        INSERT INTO tasks (id, tenant_id, project_id, assigned_user_id, title, description, status, priority) 
+        INSERT INTO tasks (id, tenant_id, project_id, assigned_to, title, description, status, priority) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
         RETURNING *
       `, [taskId, tenantId, projectId, userId, taskTitle, 'Test task description', 'todo', 'medium']);
@@ -289,26 +289,26 @@ describe('Database Integration Tests', () => {
       user2Id = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
-        INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [user1Id, tenant1Id, 'iso1@example.com', passwordHash, 'ISO', 'User1', 'user', 'active']);
+        INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [user1Id, tenant1Id, 'iso1@example.com', passwordHash, 'ISO User1', 'user', true]);
       
       await pool.query(`
-        INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [user2Id, tenant2Id, 'iso2@example.com', passwordHash, 'ISO', 'User2', 'user', 'active']);
+        INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [user2Id, tenant2Id, 'iso2@example.com', passwordHash, 'ISO User2', 'user', true]);
       
       // Create projects in each tenant
       project1Id = uuidv4(); // Use pure UUID without prefix
       project2Id = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
-        INSERT INTO projects (id, tenant_id, user_id, name, description) 
+        INSERT INTO projects (id, tenant_id, created_by, name, description) 
         VALUES ($1, $2, $3, $4, $5)
       `, [project1Id, tenant1Id, user1Id, 'ISO Project 1', 'ISO Project 1']);
       
       await pool.query(`
-        INSERT INTO projects (id, tenant_id, user_id, name, description) 
+        INSERT INTO projects (id, tenant_id, created_by, name, description) 
         VALUES ($1, $2, $3, $4, $5)
       `, [project2Id, tenant2Id, user2Id, 'ISO Project 2', 'ISO Project 2']);
       
@@ -317,12 +317,12 @@ describe('Database Integration Tests', () => {
       task2Id = uuidv4(); // Use pure UUID without prefix
       
       await pool.query(`
-        INSERT INTO tasks (id, tenant_id, project_id, assigned_user_id, title, description, status, priority) 
+        INSERT INTO tasks (id, tenant_id, project_id, assigned_to, title, description, status, priority) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `, [task1Id, tenant1Id, project1Id, user1Id, 'ISO Task 1', 'ISO Task 1', 'todo', 'medium']);
       
       await pool.query(`
-        INSERT INTO tasks (id, tenant_id, project_id, assigned_user_id, title, description, status, priority) 
+        INSERT INTO tasks (id, tenant_id, project_id, assigned_to, title, description, status, priority) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `, [task2Id, tenant2Id, project2Id, user2Id, 'ISO Task 2', 'ISO Task 2', 'todo', 'medium']);
     });

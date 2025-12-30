@@ -261,16 +261,21 @@ describe('Authentication API Endpoints', () => {
             is_active: true
           }]
         }); // Authenticate user
+      // Mock getCurrentUser controller query (the JOIN query)
       pool.query.mockResolvedValueOnce({
         rows: [{
           id: 'test-user-id',
-          tenant_id: 'test-tenant-id',
           email: 'user@test.com',
           full_name: 'Test User',
           role: 'user',
           is_active: true,
-          created_at: new Date(),
-          updated_at: new Date()
+          tenant_id: 'test-tenant-id',
+          tenant_id_check: 'test-tenant-id',
+          name: 'Test Tenant',
+          subdomain: 'test',
+          subscription_plan: 'free',
+          max_users: 5,
+          max_projects: 5
         }]
       });
       
@@ -313,6 +318,9 @@ describe('Authentication API Endpoints', () => {
             is_active: true
           }]
         }); // Authenticate user
+      // Mock audit log insertion in logout function
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Audit log insertion
       
       const response = await request(app)
         .post('/api/auth/logout')

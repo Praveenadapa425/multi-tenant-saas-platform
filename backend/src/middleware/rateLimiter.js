@@ -7,6 +7,9 @@ const rateLimit = require('express-rate-limit');
 const { RATE_LIMIT_CONFIG } = require('../constants');
 const logger = require('../utils/logger');
 
+// Disable rate limiting in test environment
+const isTestEnvironment = process.env.NODE_ENV === 'test';
+
 /**
  * Global rate limiter (applied to all routes)
  * 100 requests per 15 minutes per IP
@@ -18,6 +21,8 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
     // Skip rate limiting for health checks
     return req.path === '/api/health';
   },
@@ -47,6 +52,11 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
+  skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
+    return false;
+  },
   keyGenerator: (req, res) => {
     // Use email as key for registration to prevent account enumeration
     if (req.path === '/register-tenant' && req.body?.adminEmail) {
@@ -84,6 +94,11 @@ const registerLimiter = rateLimit({
   message: 'Too many registration attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
+    return false;
+  },
   handler: (req, res) => {
     logger.warn('Registration rate limit exceeded', {
       ip: req.ip,
@@ -106,6 +121,11 @@ const passwordResetLimiter = rateLimit({
   message: 'Too many password reset attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
+    return false;
+  },
   handler: (req, res) => {
     logger.warn('Password reset rate limit exceeded', {
       ip: req.ip,
@@ -129,6 +149,11 @@ const apiLimiter = rateLimit({
   message: 'Too many requests to this endpoint, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
+    return false;
+  },
   handler: (req, res) => {
     logger.warn('API rate limit exceeded', {
       ip: req.ip,
@@ -152,6 +177,11 @@ const createLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
+    return false;
+  },
   handler: (req, res) => {
     logger.warn('Create rate limit exceeded', {
       ip: req.ip,
@@ -176,6 +206,8 @@ const listLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
     // Skip if not a GET request
     return req.method !== 'GET';
   }
@@ -192,6 +224,11 @@ const uploadLimiter = rateLimit({
   message: 'Too many file uploads, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req, res) => {
+    // Skip rate limiting in test environment
+    if (isTestEnvironment) return true;
+    return false;
+  },
   handler: (req, res) => {
     logger.warn('Upload rate limit exceeded', {
       ip: req.ip,

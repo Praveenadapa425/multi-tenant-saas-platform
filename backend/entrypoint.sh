@@ -28,6 +28,15 @@ else
   exit 1
 fi
 
+# Run seed data
+echo "Running seed data..."
+if npm run seed; then
+  echo "Seed data completed successfully"
+else
+  echo "Seed data failed"
+  exit 1
+fi
+
 # Start the application
 echo "Starting the application..."
 exec node src/server.js

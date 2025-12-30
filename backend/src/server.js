@@ -32,8 +32,10 @@ app.use(cors({
 const logFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
 app.use(morgan(logFormat));
 
-// Apply global rate limiting to all requests
-app.use(globalLimiter);
+// Apply global rate limiting to all requests (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  app.use(globalLimiter);
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -72,16 +74,30 @@ app.get('/api/health', async (req, res) => {
 // - login: 5 attempts per 15 min (successful attempts not counted)
 // - register-tenant: 3 attempts per 15 min
 // - logout: standard auth rate limit
-app.use('/api/auth/login', authLimiter, require('./routes/auth.routes'));
-app.use('/api/auth/register-tenant', registerLimiter, require('./routes/auth.routes'));
-app.use('/api/auth/reset-password', passwordResetLimiter, require('./routes/auth.routes'));
-app.use('/api/auth', authLimiter, require('./routes/auth.routes'));
+if (process.env.NODE_ENV !== 'test') {
+  app.use('/api/auth/login', authLimiter, require('./routes/auth.routes'));
+  app.use('/api/auth/register-tenant', registerLimiter, require('./routes/auth.routes'));
+  app.use('/api/auth/reset-password', passwordResetLimiter, require('./routes/auth.routes'));
+  app.use('/api/auth', authLimiter, require('./routes/auth.routes'));
+} else {
+  app.use('/api/auth/login', require('./routes/auth.routes'));
+  app.use('/api/auth/register-tenant', require('./routes/auth.routes'));
+  app.use('/api/auth/reset-password', require('./routes/auth.routes'));
+  app.use('/api/auth', require('./routes/auth.routes'));
+}
 
 // API routes with standard rate limiting
-app.use('/api/tenants', apiLimiter, require('./routes/tenants.routes'));
-app.use('/api/users', apiLimiter, require('./routes/users.routes'));
-app.use('/api/projects', apiLimiter, require('./routes/projects.routes'));
-app.use('/api/tasks', apiLimiter, require('./routes/tasks.routes'));
+if (process.env.NODE_ENV !== 'test') {
+  app.use('/api/tenants', apiLimiter, require('./routes/tenants.routes'));
+  app.use('/api/users', apiLimiter, require('./routes/users.routes'));
+  app.use('/api/projects', apiLimiter, require('./routes/projects.routes'));
+  app.use('/api/tasks', apiLimiter, require('./routes/tasks.routes'));
+} else {
+  app.use('/api/tenants', require('./routes/tenants.routes'));
+  app.use('/api/users', require('./routes/users.routes'));
+  app.use('/api/projects', require('./routes/projects.routes'));
+  app.use('/api/tasks', require('./routes/tasks.routes'));
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {

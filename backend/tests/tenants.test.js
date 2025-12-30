@@ -8,6 +8,11 @@ jest.mock('../src/config/database', () => ({
   }
 }));
 
+// Mock the audit logger to prevent database calls during tests
+jest.mock('../src/utils/auditLogger', () => ({
+  logAction: jest.fn().mockResolvedValue(null)
+}));
+
 const app = require('../src/server');
 const { pool } = require('../src/config/database');
 

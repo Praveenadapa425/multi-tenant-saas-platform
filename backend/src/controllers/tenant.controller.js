@@ -258,7 +258,14 @@ exports.updateTenant = async (req, res) => {
     const result = await pool.query(updateQuery, params);
 
     // Log action
-    await logAction(userId, 'UPDATE', 'TENANT', tenantId, { name, status, subscriptionPlan, maxUsers, maxProjects });
+    await logAction({
+      tenantId: req.user.tenantId,
+      userId: userId,
+      action: 'UPDATE_TENANT',
+      entityType: 'tenant',
+      entityId: tenantId,
+      ipAddress: req.ip
+    });
     logger.info('Tenant updated', { tenantId, userId });
 
     res.status(200).json({

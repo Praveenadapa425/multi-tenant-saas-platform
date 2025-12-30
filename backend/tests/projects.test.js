@@ -20,6 +20,11 @@ describe('Project API Endpoints', () => {
     { id: 'admin-id', tenantId: 'tenant-id', role: 'tenant_admin' },
     process.env.JWT_SECRET || 'test-secret'
   );
+  
+  const superAdminToken = jwt.sign(
+    { id: 'super-admin-id', tenantId: null, role: 'super_admin' },
+    process.env.JWT_SECRET || 'test-secret'
+  );
 
   afterEach(() => {
     jest.clearAllMocks();
@@ -119,6 +124,27 @@ describe('Project API Endpoints', () => {
       expect(response.body.data.project.id).toBe('project-id');
     });
 
+    it('should return project details for super admin', async () => {
+      const mockProject = {
+        id: 'project-id',
+        name: 'Test Project',
+        description: 'Test Description',
+        tenant_id: 'other-tenant-id'
+      };
+      
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Check super admin
+        .mockResolvedValueOnce({ rows: [mockProject] }); // Get project
+      
+      const response = await request(app)
+        .get('/api/projects/project-id')
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(200);
+      
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.project.id).toBe('project-id');
+    });
+
     it('should return 404 for non-existent project', async () => {
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', tenant_id: 'tenant-id' }] }) // Check user
@@ -211,7 +237,7 @@ describe('Project API Endpoints', () => {
   describe('DELETE /api/projects/:projectId', () => {
     it('should delete project for authorized user', async () => {
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
         .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }); // Get project
       
       const response = await request(app)
@@ -225,7 +251,7 @@ describe('Project API Endpoints', () => {
 
     it('should return 404 for non-existent project', async () => {
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
         .mockResolvedValueOnce({ rows: [] }); // Project not found
       
       const response = await request(app)

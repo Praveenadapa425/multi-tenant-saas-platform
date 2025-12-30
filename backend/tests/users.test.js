@@ -1,15 +1,16 @@
 const request = require('supertest');
-const app = require('../src/server');
-const { pool } = require('../src/config/database');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-// Mock the database pool
+// Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
     query: jest.fn()
   }
 }));
+
+const app = require('../src/server');
+const { pool } = require('../src/config/database');
 
 describe('User API Endpoints', () => {
   const tenantAdminToken = jwt.sign(
@@ -17,6 +18,11 @@ describe('User API Endpoints', () => {
     process.env.JWT_SECRET || 'test-secret'
   );
   
+  const superAdminToken = jwt.sign(
+    { id: 'super-admin-id', tenantId: null, role: 'super_admin' },
+    process.env.JWT_SECRET || 'test-secret'
+  );
+
   const regularUserToken = jwt.sign(
     { id: 'regular-user-id', tenantId: 'tenant-id', role: 'user' },
     process.env.JWT_SECRET || 'test-secret'
@@ -29,8 +35,7 @@ describe('User API Endpoints', () => {
   describe('POST /api/users', () => {
     it('should add a new user to tenant for tenant admin', async () => {
       const userData = {
-        firstName: 'New',
-        lastName: 'User',
+        fullName: 'New User',
         email: 'newuser@test.com',
         password: 'Password123!',
         role: 'user'
@@ -53,8 +58,7 @@ describe('User API Endpoints', () => {
 
     it('should return 403 for regular user trying to add user', async () => {
       const userData = {
-        firstName: 'New',
-        lastName: 'User',
+        fullName: 'New User',
         email: 'newuser@test.com',
         password: 'Password123!',
         role: 'user'
@@ -84,8 +88,7 @@ describe('User API Endpoints', () => {
 
     it('should return 400 when email already exists', async () => {
       const userData = {
-        firstName: 'New',
-        lastName: 'User',
+        fullName: 'New User',
         email: 'existing@test.com',
         password: 'Password123!',
         role: 'user'
@@ -108,8 +111,8 @@ describe('User API Endpoints', () => {
   describe('GET /api/users', () => {
     it('should return users for authenticated user', async () => {
       const mockUsers = [
-        { id: 'user1', email: 'user1@test.com', first_name: 'User', last_name: 'One', role: 'user' },
-        { id: 'user2', email: 'user2@test.com', first_name: 'User', last_name: 'Two', role: 'user' }
+        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user' },
+        { id: 'user2', email: 'user2@test.com', full_name: 'User Two', role: 'user' }
       ];
       
       pool.query
@@ -138,7 +141,7 @@ describe('User API Endpoints', () => {
   describe('GET /api/users/tenants/:tenantId', () => {
     it('should return users for specific tenant', async () => {
       const mockUsers = [
-        { id: 'user1', email: 'user1@test.com', first_name: 'User', last_name: 'One', role: 'user' }
+        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user' }
       ];
       
       pool.query
@@ -148,6 +151,24 @@ describe('User API Endpoints', () => {
       const response = await request(app)
         .get('/api/users/tenants/tenant-id')
         .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .expect(200);
+      
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(1);
+    });
+
+    it('should allow super admin to access users from any tenant', async () => {
+      const mockUsers = [
+        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user' }
+      ];
+      
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Check super admin
+        .mockResolvedValueOnce({ rows: mockUsers }); // Get users
+      
+      const response = await request(app)
+        .get('/api/users/tenants/other-tenant-id')
+        .set('Authorization', `Bearer ${superAdminToken}`)
         .expect(200);
       
       expect(response.body.success).toBe(true);
@@ -170,8 +191,7 @@ describe('User API Endpoints', () => {
   describe('PUT /api/users/:userId', () => {
     it('should update user for authenticated user on their own account', async () => {
       const updateData = {
-        firstName: 'Updated',
-        lastName: 'Name',
+        fullName: 'Updated Name',
         email: 'updated@test.com'
       };
       
@@ -190,7 +210,7 @@ describe('User API Endpoints', () => {
 
     it('should allow tenant admin to update any user in their tenant', async () => {
       const updateData = {
-        firstName: 'Updated by Admin',
+        fullName: 'Updated by Admin',
         role: 'admin'
       };
       
@@ -209,7 +229,7 @@ describe('User API Endpoints', () => {
 
     it('should return 403 for unauthorized user update', async () => {
       const updateData = {
-        firstName: 'Unauthorized Update'
+        fullName: 'Unauthorized Update'
       };
       
       pool.query

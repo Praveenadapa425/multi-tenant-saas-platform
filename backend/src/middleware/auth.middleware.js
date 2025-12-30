@@ -104,16 +104,19 @@ function tenantIsolation(req, res, next) {
       message: 'Authentication required'
     });
   }
-  
+
   // Super admins can access all tenants
   if (req.user.role === 'super_admin') {
     if (req.params.tenantId) {
       req.targetTenantId = req.params.tenantId;
+    } else if (req.query.tenantId) {
+      // Allow super_admin to specify tenant via query parameter as well
+      req.targetTenantId = req.query.tenantId;
     }
     next();
     return;
   }
-  
+
   // Regular users can only access their own tenant
   if (req.params.tenantId && req.params.tenantId !== req.user.tenantId) {
     return res.status(403).json({
@@ -121,7 +124,7 @@ function tenantIsolation(req, res, next) {
       message: 'Access to this tenant is forbidden'
     });
   }
-  
+
   req.targetTenantId = req.user.tenantId;
   next();
 }

@@ -60,6 +60,40 @@ describe('Tenant API Endpoints', () => {
       expect(response.body.data.stats).toBeDefined();
     });
 
+    it('should return tenant details for super_admin', async () => {
+      const mockTenant = {
+        id: 'other-tenant-id',
+        name: 'Other Tenant',
+        subdomain: 'other',
+        status: 'active',
+        subscription_plan: 'free',
+        max_users: 5,
+        max_projects: 5,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      
+      const mockStats = {
+        total_users: 2,
+        total_projects: 3,
+        total_tasks: 5
+      };
+      
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Check super_admin
+        .mockResolvedValueOnce({ rows: [mockTenant] }) // Get tenant
+        .mockResolvedValueOnce({ rows: [mockStats] }); // Get stats
+      
+      const response = await request(app)
+        .get('/api/tenants/other-tenant-id')
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(200);
+      
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toBeDefined();
+      expect(response.body.data.stats).toBeDefined();
+    });
+
     it('should return 403 for unauthorized access to different tenant', async () => {
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'user', tenant_id: 'other-tenant-id' }] }); // User from different tenant

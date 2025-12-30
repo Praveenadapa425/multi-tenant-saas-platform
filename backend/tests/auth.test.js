@@ -1,15 +1,16 @@
 const request = require('supertest');
-const app = require('../src/server');
-const { pool } = require('../src/config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Mock the database pool to avoid actual database calls during testing
+// Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
     query: jest.fn()
   }
 }));
+
+const app = require('../src/server');
+const { pool } = require('../src/config/database');
 
 describe('Authentication API Endpoints', () => {
   afterEach(() => {
@@ -34,8 +35,7 @@ describe('Authentication API Endpoints', () => {
         id: 'test-user-id',
         tenant_id: 'test-tenant-id',
         email: 'admin@test.com',
-        first_name: 'Test',
-        last_name: 'Admin',
+        full_name: 'Test Admin',
         role: 'tenant_admin',
         status: 'active',
         created_at: new Date(),
@@ -52,17 +52,16 @@ describe('Authentication API Endpoints', () => {
         .send({
           tenantName: 'Test Tenant',
           subdomain: 'test',
-          firstName: 'Test',
-          lastName: 'Admin',
-          email: 'admin@test.com',
-          password: 'Password123!'
+          adminEmail: 'admin@test.com',
+          adminPassword: 'Password123!',
+          adminFullName: 'Test Admin'
         })
         .expect(201);
         
       expect(response.body.success).toBe(true);
       expect(response.body.data.tenant).toBeDefined();
-      expect(response.body.data.user).toBeDefined();
-      expect(response.body.data.token).toBeDefined();
+      expect(response.body.data.adminUser).toBeDefined();
+      expect(response.body.data.adminUser.email).toBe('admin@test.com');
     });
 
     it('should return 400 when required fields are missing', async () => {
@@ -82,42 +81,48 @@ describe('Authentication API Endpoints', () => {
         .send({
           tenantName: 'Test Tenant',
           subdomain: 'existing',
-          firstName: 'Test',
-          lastName: 'Admin',
-          email: 'admin@test.com',
-          password: 'Password123!'
+          adminEmail: 'admin@test.com',
+          adminPassword: 'Password123!',
+          adminFullName: 'Test Admin'
         })
         .expect(400);
         
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('subdomain');
+      expect(response.body.message).toContain('Validation');
     });
   });
 
   describe('POST /api/auth/login', () => {
-    it('should authenticate a user and return a token', async () => {
+    it('should authenticate a regular user and return a token', async () => {
       const hashedPassword = await bcrypt.hash('Password123!', 10);
       
+      pool.query.mockResolvedValueOnce({ rows: [] }); // Check super_admin first
+      pool.query.mockResolvedValueOnce({
+        rows: [{
+          id: 'test-tenant-id',
+          status: 'active'
+        }]
+      }); // Check tenant
       pool.query.mockResolvedValueOnce({
         rows: [{
           id: 'test-user-id',
           tenant_id: 'test-tenant-id',
           email: 'user@test.com',
           password_hash: hashedPassword,
-          first_name: 'Test',
-          last_name: 'User',
+          full_name: 'Test User',
           role: 'user',
           status: 'active',
           created_at: new Date(),
           updated_at: new Date()
         }]
-      });
+      }); // Find regular user
       
       const response = await request(app)
         .post('/api/auth/login')
         .send({
           email: 'user@test.com',
-          password: 'Password123!'
+          password: 'Password123!',
+          tenantSubdomain: 'test'
         })
         .expect(200);
         
@@ -126,19 +131,105 @@ describe('Authentication API Endpoints', () => {
       expect(response.body.data.user).toBeDefined();
     });
 
+    it('should authenticate a super_admin user with tenant subdomain', async () => {
+      const hashedPassword = await bcrypt.hash('Password123!', 10);
+      
+      pool.query.mockResolvedValueOnce({
+        rows: [{
+          id: 'super-admin-id',
+          tenant_id: null,
+          email: 'superadmin@system.com',
+          password_hash: hashedPassword,
+          full_name: 'Super Admin',
+          role: 'super_admin',
+          status: 'active',
+          created_at: new Date(),
+          updated_at: new Date()
+        }]
+      }); // Find super_admin user
+      pool.query.mockResolvedValueOnce({
+        rows: [{
+          id: 'test-tenant-id',
+          status: 'active'
+        }]
+      }); // Check tenant exists
+      
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'superadmin@system.com',
+          password: 'Password123!',
+          tenantSubdomain: 'test'
+        })
+        .expect(200);
+        
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.token).toBeDefined();
+      expect(response.body.data.user).toBeDefined();
+      expect(response.body.data.user.role).toBe('super_admin');
+    });
+
+    it('should authenticate a super_admin user without tenant subdomain', async () => {
+      const hashedPassword = await bcrypt.hash('Password123!', 10);
+      
+      pool.query.mockResolvedValueOnce({
+        rows: [{
+          id: 'super-admin-id',
+          tenant_id: null,
+          email: 'superadmin@system.com',
+          password_hash: hashedPassword,
+          full_name: 'Super Admin',
+          role: 'super_admin',
+          status: 'active',
+          created_at: new Date(),
+          updated_at: new Date()
+        }]
+      }); // Find super_admin user
+      
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'superadmin@system.com',
+          password: 'Password123!'
+          // No tenantSubdomain provided - should work for super_admin
+        })
+        .expect(200);
+        
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.token).toBeDefined();
+      expect(response.body.data.user).toBeDefined();
+      expect(response.body.data.user.role).toBe('super_admin');
+    });
+
     it('should return 401 for invalid credentials', async () => {
-      pool.query.mockResolvedValueOnce({ rows: [] }); // No user found
+      pool.query.mockResolvedValueOnce({ rows: [] }); // No super_admin found
+      pool.query.mockResolvedValueOnce({ rows: [] }); // No tenant found (for regular user flow)
       
       const response = await request(app)
         .post('/api/auth/login')
         .send({
           email: 'nonexistent@test.com',
-          password: 'wrongpassword'
+          password: 'wrongpassword',
+          tenantSubdomain: 'test'
         })
         .expect(401);
         
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Invalid email or password');
+      expect(response.body.message).toBe('Invalid credentials');
+    });
+
+    it('should return 400 for regular user without tenant subdomain', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'user@test.com',
+          password: 'Password123!'
+          // No tenantSubdomain provided - should fail for regular user
+        })
+        .expect(400);
+        
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe('Tenant subdomain is required for non-super-admin users');
     });
 
     it('should return 400 when required fields are missing', async () => {
@@ -163,10 +254,9 @@ describe('Authentication API Endpoints', () => {
           id: 'test-user-id',
           tenant_id: 'test-tenant-id',
           email: 'user@test.com',
-          first_name: 'Test',
-          last_name: 'User',
+          full_name: 'Test User',
           role: 'user',
-          status: 'active',
+          is_active: true,
           created_at: new Date(),
           updated_at: new Date()
         }]
@@ -205,7 +295,7 @@ describe('Authentication API Endpoints', () => {
         .expect(200);
         
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('Successfully logged out');
+      expect(response.body.message).toBe('Logged out successfully');
     });
 
     it('should return 401 for invalid token', async () => {

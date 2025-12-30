@@ -70,9 +70,13 @@ const userLoginValidation = [
     .notEmpty()
     .withMessage('Password is required'),
   
+  // For super_admin users, tenantSubdomain is optional, but for regular users it's required
   body('tenantSubdomain')
-    .notEmpty()
-    .withMessage('Tenant subdomain is required'),
+    .optional()
+    .isLength({ min: 3, max: 63 })
+    .withMessage('Tenant subdomain must be between 3 and 63 characters')
+    .matches(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/)
+    .withMessage('Subdomain can only contain lowercase letters, numbers, and hyphens (cannot start or end with hyphen)'),
   
   handleValidationErrors
 ];

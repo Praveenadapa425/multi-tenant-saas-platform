@@ -124,28 +124,40 @@ async function login(req, res) {
       // Found super_admin user
       user = userResult.rows[0];
       
-      // For super_admin, we can use any tenant for the context
-      const tenantResult = await pool.query(
-        'SELECT id, status FROM tenants WHERE subdomain = $1',
-        [tenantSubdomain]
-      );
-      
-      if (tenantResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Tenant not found'
-        });
+      // For super_admin users, tenantSubdomain is optional
+      if (tenantSubdomain) {
+        // If provided, validate the tenant exists and is active
+        const tenantResult = await pool.query(
+          'SELECT id, status FROM tenants WHERE subdomain = $1',
+          [tenantSubdomain]
+        );
+        
+        if (tenantResult.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            message: 'Tenant not found'
+          });
+        }
+        
+        tenant = tenantResult.rows[0];
+        
+        if (tenant.status !== 'active') {
+          return res.status(403).json({
+            success: false,
+            message: 'Tenant account is not active'
+          });
+        }
       }
-      
-      tenant = tenantResult.rows[0];
-      
-      if (tenant.status !== 'active') {
-        return res.status(403).json({
-          success: false,
-          message: 'Tenant account is not active'
-        });
-      }
+      // If no tenantSubdomain provided, super_admin can still log in
     } else {
+      // For regular users, tenantSubdomain is required
+      if (!tenantSubdomain) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tenant subdomain is required for non-super-admin users'
+        });
+      }
+      
       // Find tenant by subdomain for regular users
       const tenantResult = await pool.query(
         'SELECT id, status FROM tenants WHERE subdomain = $1',
@@ -209,7 +221,7 @@ async function login(req, res) {
       role: user.role
     });
     
-    // Log action
+    // Log action - for super_admin, we might not have a tenant_id
     await pool.query(
       `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, ip_address)
        VALUES ($1, $2, $3, $4, $5, $6)`,

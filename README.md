@@ -45,6 +45,12 @@ This command will:
 3. Start the React frontend on port 3000
 4. Automatically run database migrations and seed data
 
+On container startup, migrations and seed data are automatically executed. The seed data includes:
+- Super Admin: superadmin@system.com / Admin@123
+- Sample Tenant with Tenant Admin: admin@demo.com / Demo@123
+- Sample User: user@demo.com / User@123
+- Sample Projects and Tasks for demonstration
+
 Once the services are running, you can access:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:5000

@@ -15,6 +15,7 @@ jobs:
         image: postgres:13
         env:
           POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
           POSTGRES_DB: saas_test
         options: >-
           --health-cmd pg_isready
@@ -43,11 +44,25 @@ jobs:
         cd backend
         npm ci
 
+    - name: Setup test database schema
+      run: |
+        cd backend
+        # Run migrations on test database
+        npm run migrate
+      env:
+        NODE_ENV: test
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_NAME: saas_test
+        JWT_SECRET: test-secret
     - name: Run backend tests
       run: |
         cd backend
         npm run test:coverage
       env:
+        NODE_ENV: test
         DB_HOST: localhost
         DB_PORT: 5432
         DB_USER: postgres

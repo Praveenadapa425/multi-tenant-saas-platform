@@ -5,8 +5,8 @@ const tenantService = {
    * Get all tenants (Super Admin only)
    * @returns {Promise} - Axios promise
    */
-  getAllTenants() {
-    return api.get('/tenants');
+  getAllTenants(params = {}) {
+    return api.get('/tenants', params);
   },
 
   /**

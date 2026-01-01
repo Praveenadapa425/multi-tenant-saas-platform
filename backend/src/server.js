@@ -93,11 +93,13 @@ if (process.env.NODE_ENV !== 'test') {
   app.use('/api/users', apiLimiter, require('./routes/users.routes'));
   app.use('/api/projects', apiLimiter, require('./routes/projects.routes'));
   app.use('/api/tasks', apiLimiter, require('./routes/tasks.routes'));
+  app.use('/api/superadmin', apiLimiter, require('./routes/superadmin.routes'));
 } else {
   app.use('/api/tenants', require('./routes/tenants.routes'));
   app.use('/api/users', require('./routes/users.routes'));
   app.use('/api/projects', require('./routes/projects.routes'));
   app.use('/api/tasks', require('./routes/tasks.routes'));
+  app.use('/api/superadmin', require('./routes/superadmin.routes'));
 }
 
 // Error handling middleware

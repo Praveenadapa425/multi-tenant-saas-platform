@@ -86,28 +86,40 @@ async function listProjects(req, res) {
 
   try {
     let query = `SELECT p.*, 
-      (SELECT COUNT(*) FROM tasks WHERE project_id = p.id AND tenant_id = $1) as task_count
-      FROM projects p WHERE p.tenant_id = $1`;
-    let countQuery = 'SELECT COUNT(*) as count FROM projects WHERE tenant_id = $1';
-    const params = [req.user.tenantId];
-    const countParams = [req.user.tenantId];
+      (SELECT COUNT(*) FROM tasks WHERE project_id = p.id ${req.user.role === 'super_admin' ? '' : 'AND tenant_id = $1'}) as task_count
+      FROM projects p`;
+    let countQuery = 'SELECT COUNT(*) as count FROM projects';
+    let whereClause = req.user.role === 'super_admin' ? '' : ' WHERE tenant_id = $1';
+    query += whereClause;
+    countQuery += whereClause;
+    
+    const params = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
+    const countParams = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
 
     if (status) {
-      query += ' AND p.status = $' + (params.length + 1);
-      countQuery += ' AND status = $' + (countParams.length + 1);
+      const paramIndex = params.length + 1;
+      query += (whereClause ? ' AND' : ' WHERE') + ` p.status = $${paramIndex}`;
+      countQuery += (whereClause ? ' AND' : ' WHERE') + ` status = $${paramIndex}`;
       params.push(status);
       countParams.push(status);
+      whereClause = ' WHERE'; // Update for potential search condition
     }
 
     if (search) {
-      query += ' AND (p.name ILIKE $' + (params.length + 1) + ' OR p.description ILIKE $' + (params.length + 1) + ')';
-      countQuery += ' AND (name ILIKE $' + (countParams.length + 1) + ' OR description ILIKE $' + (countParams.length + 1) + ')';
+      const paramIndex = params.length + 1;
+      query += (whereClause ? ' AND' : ' WHERE') + ` (p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex})`;
+      countQuery += (whereClause ? ' AND' : ' WHERE') + ` (name ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
       countParams.push(`%${search}%`);
     }
 
-    query += ' ORDER BY p.created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
-    params.push(parseInt(limit), offset);
+    query += ' ORDER BY p.created_at DESC';
+    if (limit !== 'all') {
+      const limitParamIndex = params.length + 1;
+      const offsetParamIndex = params.length + 2;
+      query += ` LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`;
+      params.push(parseInt(limit), offset);
+    }
 
     const [projectsResult, countResult] = await Promise.all([
       pool.query(query, params),
@@ -115,17 +127,17 @@ async function listProjects(req, res) {
     ]);
 
     const totalCount = parseInt(countResult.rows[0].count);
-    const totalPages = Math.ceil(totalCount / parseInt(limit));
+    const totalPages = limit !== 'all' ? Math.ceil(totalCount / parseInt(limit)) : 1;
 
     res.status(200).json({
       success: true,
       data: projectsResult.rows,
-      pagination: {
+      pagination: limit !== 'all' ? {
         page: parseInt(page),
         limit: parseInt(limit),
         total: totalCount,
         pages: totalPages
-      }
+      } : undefined
     });
   } catch (error) {
     console.error('Error listing projects:', error);
@@ -145,10 +157,18 @@ async function getProject(req, res) {
 
   try {
     // Get project details
-    const projectResult = await pool.query(
-      'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
-      [projectId, req.user.tenantId]
-    );
+    let projectResult;
+    if (req.user.role === 'super_admin') {
+      projectResult = await pool.query(
+        'SELECT * FROM projects WHERE id = $1',
+        [projectId]
+      );
+    } else {
+      projectResult = await pool.query(
+        'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
+        [projectId, req.user.tenantId]
+      );
+    }
 
     if (projectResult.rows.length === 0) {
       return res.status(404).json({
@@ -160,15 +180,30 @@ async function getProject(req, res) {
     const project = projectResult.rows[0];
 
     // Get task statistics
-    const statsResult = await pool.query(`
-      SELECT 
-        COUNT(*) as total_tasks,
-        COUNT(CASE WHEN status = 'todo' THEN 1 END) as todo_count,
-        COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_count,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count
-      FROM tasks
-      WHERE project_id = $1 AND tenant_id = $2
-    `, [projectId, req.user.tenantId]);
+    let statsQuery;
+    if (req.user.role === 'super_admin') {
+      statsQuery = `
+        SELECT 
+          COUNT(*) as total_tasks,
+          COUNT(CASE WHEN status = 'todo' THEN 1 END) as todo_count,
+          COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_count,
+          COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count
+        FROM tasks
+        WHERE project_id = $1
+      `;
+    } else {
+      statsQuery = `
+        SELECT 
+          COUNT(*) as total_tasks,
+          COUNT(CASE WHEN status = 'todo' THEN 1 END) as todo_count,
+          COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_count,
+          COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count
+        FROM tasks
+        WHERE project_id = $1 AND tenant_id = $2
+      `;
+    }
+    
+    const statsResult = await pool.query(statsQuery, req.user.role === 'super_admin' ? [projectId] : [projectId, req.user.tenantId]);
 
     res.status(200).json({
       success: true,
@@ -196,10 +231,18 @@ async function updateProject(req, res) {
 
   try {
     // Check if project exists and belongs to user's tenant
-    const projectResult = await pool.query(
-      'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
-      [projectId, req.user.tenantId]
-    );
+    let projectResult;
+    if (req.user.role === 'super_admin') {
+      projectResult = await pool.query(
+        'SELECT * FROM projects WHERE id = $1',
+        [projectId]
+      );
+    } else {
+      projectResult = await pool.query(
+        'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
+        [projectId, req.user.tenantId]
+      );
+    }
 
     if (projectResult.rows.length === 0) {
       return res.status(404).json({
@@ -250,28 +293,51 @@ async function updateProject(req, res) {
 
     updates.push(`updated_at = NOW()`);
     params.push(projectId);
-    params.push(req.user.tenantId);
+    
+    // For super admins, update without tenant restriction; for others, update with tenant restriction
+    if (req.user.role === 'super_admin') {
+      params.push(project.tenant_id); // Use the project's actual tenant_id for the update
+      const query = `UPDATE projects SET ${updates.join(', ')} WHERE id = $${paramCount} AND tenant_id = $${paramCount + 1} RETURNING *`;
+      const result = await pool.query(query, params);
+      const updatedProject = result.rows[0];
+      
+      // Log action
+      await logAction({
+        tenantId: project.tenant_id, // Use the project's actual tenant_id
+        userId: req.user.id,
+        action: 'UPDATE_PROJECT',
+        entityType: 'project',
+        entityId: projectId,
+        ipAddress: req.ip
+      });
 
-    const query = `UPDATE projects SET ${updates.join(', ')} WHERE id = $${paramCount} AND tenant_id = $${paramCount + 1} RETURNING *`;
-    const result = await pool.query(query, params);
+      res.status(200).json({
+        success: true,
+        message: 'Project updated successfully',
+        data: updatedProject
+      });
+    } else {
+      params.push(req.user.tenantId);
+      const query = `UPDATE projects SET ${updates.join(', ')} WHERE id = $${paramCount} AND tenant_id = $${paramCount + 1} RETURNING *`;
+      const result = await pool.query(query, params);
+      const updatedProject = result.rows[0];
+      
+      // Log action
+      await logAction({
+        tenantId: req.user.tenantId,
+        userId: req.user.id,
+        action: 'UPDATE_PROJECT',
+        entityType: 'project',
+        entityId: projectId,
+        ipAddress: req.ip
+      });
 
-    const updatedProject = result.rows[0];
-
-    // Log action
-    await logAction({
-      tenantId: req.user.tenantId,
-      userId: req.user.id,
-      action: 'UPDATE_PROJECT',
-      entityType: 'project',
-      entityId: projectId,
-      ipAddress: req.ip
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Project updated successfully',
-      data: updatedProject
-    });
+      res.status(200).json({
+        success: true,
+        message: 'Project updated successfully',
+        data: updatedProject
+      });
+    }
   } catch (error) {
     console.error('Error updating project:', error);
     res.status(500).json({
@@ -289,11 +355,22 @@ async function deleteProject(req, res) {
   const { projectId } = req.params;
 
   try {
-    // Check if project exists and belongs to user's tenant
-    const projectResult = await pool.query(
-      'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
-      [projectId, req.user.tenantId]
-    );
+    let projectResult;
+    let project;
+
+    // Super admins can delete projects across any tenant
+    if (req.user.role === 'super_admin') {
+      projectResult = await pool.query(
+        'SELECT * FROM projects WHERE id = $1',
+        [projectId]
+      );
+    } else {
+      // Regular users can only delete projects in their own tenant
+      projectResult = await pool.query(
+        'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
+        [projectId, req.user.tenantId]
+      );
+    }
 
     if (projectResult.rows.length === 0) {
       return res.status(404).json({
@@ -302,10 +379,10 @@ async function deleteProject(req, res) {
       });
     }
 
-    const project = projectResult.rows[0];
+    project = projectResult.rows[0];
 
-    // Authorization: Only tenant_admin or project creator can delete
-    if (req.user.role !== 'tenant_admin' && project.created_by !== req.user.id) {
+    // Authorization: Only tenant_admin, super_admin, or project creator can delete
+    if (req.user.role !== 'super_admin' && req.user.role !== 'tenant_admin' && project.created_by !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -315,15 +392,23 @@ async function deleteProject(req, res) {
     // Delete all tasks in the project first
     await pool.query('DELETE FROM tasks WHERE project_id = $1', [projectId]);
 
-    // Delete project
-    const deleteResult = await pool.query(
-      'DELETE FROM projects WHERE id = $1 RETURNING id',
-      [projectId]
-    );
+    // Delete project - super admins can delete from any tenant, others only from their tenant
+    let deleteResult;
+    if (req.user.role === 'super_admin') {
+      deleteResult = await pool.query(
+        'DELETE FROM projects WHERE id = $1 RETURNING id',
+        [projectId]
+      );
+    } else {
+      deleteResult = await pool.query(
+        'DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id',
+        [projectId, req.user.tenantId]
+      );
+    }
 
     // Log action
     await logAction({
-      tenantId: req.user.tenantId,
+      tenantId: req.user.role === 'super_admin' ? project.tenant_id : req.user.tenantId,
       userId: req.user.id,
       action: 'DELETE_PROJECT',
       entityType: 'project',

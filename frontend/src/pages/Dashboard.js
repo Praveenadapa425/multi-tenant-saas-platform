@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import projectService from '../services/projectService';
 import taskService from '../services/taskService';
 import userService from '../services/userService';
+import superadminService from '../services/superadminService';
 import '../styles/Dashboard.css';
 
 const Dashboard = () => {
@@ -17,7 +18,7 @@ const Dashboard = () => {
   const [recentTasks, setRecentTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { user, tenant } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,48 +26,95 @@ const Dashboard = () => {
       try {
         setLoading(true);
         
-        // Fetch all data in parallel
-        const [projectsRes, tasksRes, usersRes] = await Promise.allSettled([
-          projectService.getProjects(),
-          taskService.getTasks(),
-          userService.getUsers()
-        ]);
+        if (user?.role === 'super_admin') {
+          // For super admin, get system-wide stats
+          const statsRes = await superadminService.getSystemStats();
+          if (statsRes.success) {
+            setStats({
+              projects: statsRes.data.totalProjects,
+              tasks: statsRes.data.totalTasks,
+              users: statsRes.data.totalUsers,
+              completedTasks: 0 // This would need a separate endpoint to calculate
+            });
+          }
 
-        // Handle projects response
-        let projects = [];
-        if (projectsRes.status === 'fulfilled' && projectsRes.value?.data?.success) {
-          projects = projectsRes.value.data.data || [];
+          // Get recent projects and tasks
+          const [projectsRes, tasksRes] = await Promise.allSettled([
+            projectService.getProjects(),
+            taskService.getTasks()
+          ]);
+
+          // Handle projects response
+          let projects = [];
+          if (projectsRes.status === 'fulfilled' && projectsRes.value?.data?.success) {
+            projects = projectsRes.value.data.data || [];
+          } else {
+            console.error('Error fetching projects:', projectsRes.reason);
+          }
+
+          // Handle tasks response
+          let tasks = [];
+          if (tasksRes.status === 'fulfilled' && tasksRes.value?.data?.success) {
+            tasks = tasksRes.value.data.data || [];
+          } else {
+            console.error('Error fetching tasks:', tasksRes.reason);
+          }
+
+          const completedTasks = tasks.filter(t => t.status === 'completed').length;
+          setStats(prev => ({ 
+            projects: prev.projects, 
+            tasks: prev.tasks, 
+            users: prev.users, 
+            completedTasks 
+          }));
+
+          setRecentProjects(projects.slice(0, 5));
+          setRecentTasks(tasks.slice(0, 5));
         } else {
-          console.error('Error fetching projects:', projectsRes.reason);
+          // For regular users, get tenant-specific data
+          // Fetch all data in parallel
+          const [projectsRes, tasksRes, usersRes] = await Promise.allSettled([
+            projectService.getProjects(),
+            taskService.getTasks(),
+            userService.getUsers()
+          ]);
+
+          // Handle projects response
+          let projects = [];
+          if (projectsRes.status === 'fulfilled' && projectsRes.value?.data?.success) {
+            projects = projectsRes.value.data.data || [];
+          } else {
+            console.error('Error fetching projects:', projectsRes.reason);
+          }
+
+          // Handle tasks response
+          let tasks = [];
+          if (tasksRes.status === 'fulfilled' && tasksRes.value?.data?.success) {
+            tasks = tasksRes.value.data.data || [];
+          } else {
+            console.error('Error fetching tasks:', tasksRes.reason);
+          }
+
+          // Handle users response
+          let users = [];
+          if (usersRes.status === 'fulfilled' && usersRes.value?.data?.success) {
+            users = usersRes.value.data.data || [];
+          } else {
+            console.error('Error fetching users:', usersRes.reason);
+          }
+
+          const completedTasks = tasks.filter(t => t.status === 'completed').length;
+
+          setStats({
+            projects: projects.length,
+            tasks: tasks.length,
+            users: users.length,
+            completedTasks: completedTasks
+          });
+
+          setRecentProjects(projects.slice(0, 5));
+          setRecentTasks(tasks.slice(0, 5));
         }
-
-        // Handle tasks response
-        let tasks = [];
-        if (tasksRes.status === 'fulfilled' && tasksRes.value?.data?.success) {
-          tasks = tasksRes.value.data.data || [];
-        } else {
-          console.error('Error fetching tasks:', tasksRes.reason);
-        }
-
-        // Handle users response
-        let users = [];
-        if (usersRes.status === 'fulfilled' && usersRes.value?.data?.success) {
-          users = usersRes.value.data.data || [];
-        } else {
-          console.error('Error fetching users:', usersRes.reason);
-        }
-
-        const completedTasks = tasks.filter(t => t.status === 'completed').length;
-
-        setStats({
-          projects: projects.length,
-          tasks: tasks.length,
-          users: users.length,
-          completedTasks: completedTasks
-        });
-
-        setRecentProjects(projects.slice(0, 5));
-        setRecentTasks(tasks.slice(0, 5));
       } catch (err) {
         setError('Failed to load dashboard data');
         console.error(err);
@@ -76,7 +124,7 @@ const Dashboard = () => {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (
@@ -94,9 +142,14 @@ const Dashboard = () => {
 
       <div className="dashboard-header">
         <div>
-          <h1>Dashboard</h1>
+          <h1>{user?.role === 'super_admin' ? 'System Dashboard' : 'Dashboard'}</h1>
           <p className="subtitle">Welcome back, {user?.fullName}!</p>
-          {tenant && <p className="tenant-info">Organization: {tenant.name}</p>}
+          {user?.role !== 'super_admin' && user?.tenant && (
+            <p className="tenant-info">Organization: {user.tenant.name}</p>
+          )}
+          {user?.role === 'super_admin' && (
+            <p className="tenant-info">System Administrator - Access to all tenants</p>
+          )}
         </div>
       </div>
 
@@ -212,6 +265,15 @@ const Dashboard = () => {
             <span className="action-icon">👥</span>
             <span className="action-text">Manage Users</span>
           </button>
+          {user?.role === 'super_admin' && (
+            <button 
+              className="action-btn"
+              onClick={() => navigate('/system-admin')}
+            >
+              <span className="action-icon">⚙️</span>
+              <span className="action-text">System Admin</span>
+            </button>
+          )}
         </div>
       </section>
     </div>

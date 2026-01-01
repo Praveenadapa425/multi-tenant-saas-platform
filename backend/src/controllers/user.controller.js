@@ -36,10 +36,10 @@ exports.addUser = async (req, res) => {
     }
     
     // Authorization check
-    if (req.user.role !== 'tenant_admin') {
+    if (req.user.role !== 'tenant_admin' && req.user.role !== 'super_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only tenant admins can add users'
+        message: 'Only tenant admins and super admins can add users'
       });
     }
     
@@ -130,30 +130,25 @@ exports.addUser = async (req, res) => {
 exports.listUsers = async (req, res) => {
   try {
     const { search, role, page = 1, limit = 50 } = req.query;
-    const tenantId = req.user.tenantId;
     
-    // Authorization - user must belong to the same tenant
-    if (req.user.tenantId !== tenantId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-    
-    let query = 'SELECT id, email, full_name, role, is_active, created_at FROM users WHERE tenant_id = $1';
-    const values = [tenantId];
-    let paramCount = 2;
+    let query = 'SELECT id, email, full_name, role, is_active, created_at FROM users';
+    let whereClause = req.user.role === 'super_admin' ? '' : ' WHERE tenant_id = $1';
+    query += whereClause;
+    const values = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
+    let paramCount = req.user.role === 'super_admin' ? 1 : 2;
     
     if (search) {
-      query += ` AND (email ILIKE $${paramCount} OR full_name ILIKE $${paramCount})`;
+      query += (whereClause ? ' AND' : ' WHERE') + ` (email ILIKE $${paramCount} OR full_name ILIKE $${paramCount})`;
       values.push(`%${search}%`);
       paramCount++;
+      whereClause = ' WHERE'; // Update for potential other conditions
     }
     
     if (role) {
-      query += ` AND role = $${paramCount}`;
+      query += (whereClause ? ' AND' : ' WHERE') + ` role = $${paramCount}`;
       values.push(role);
       paramCount++;
+      whereClause = ' WHERE'; // Update for potential other conditions
     }
     
     // Get total count
@@ -163,8 +158,11 @@ exports.listUsers = async (req, res) => {
     
     // Get paginated results
     const offset = (page - 1) * limit;
-    query += ` ORDER BY created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-    values.push(limit, offset);
+    query += ` ORDER BY created_at DESC`;
+    if (limit !== 'all') {
+      query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+      values.push(limit, offset);
+    }
     
     const result = await pool.query(query, values);
     
@@ -182,11 +180,11 @@ exports.listUsers = async (req, res) => {
       data: {
         users,
         total,
-        pagination: {
+        pagination: limit !== 'all' ? {
           currentPage: parseInt(page),
           totalPages: Math.ceil(total / limit),
           limit: parseInt(limit)
-        }
+        } : undefined
       }
     });
   } catch (error) {
@@ -389,14 +387,15 @@ exports.deleteUser = async (req, res) => {
     const userTenantId = userResult.rows[0].tenant_id;
     
     // Authorization
-    if (req.user.role !== 'tenant_admin') {
+    if (req.user.role !== 'tenant_admin' && req.user.role !== 'super_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only tenant admins can delete users'
+        message: 'Only tenant admins and super admins can delete users'
       });
     }
     
-    if (req.user.tenantId !== userTenantId) {
+    // Super admins can delete users from any tenant, tenant admins can only delete from their own tenant
+    if (req.user.role === 'tenant_admin' && req.user.tenantId !== userTenantId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'

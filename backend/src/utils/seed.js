@@ -29,36 +29,21 @@ async function seedDatabase() {
       const superAdminTenantId = uuidv4();
       const superAdminUserId = uuidv4();
       
-      // Create super admin tenant
-      await pool.query(`
-        INSERT INTO tenants (id, name, subdomain, status, subscription_plan, max_users, max_projects) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [
-        superAdminTenantId,
-        'System Admin',
-        'system',
-        'active',
-        'enterprise',
-        100,
-        100
-      ]);
-
       // Hash the super admin password
       const hashedPassword = await bcrypt.hash('Admin@123', 10);
       
-      // Create super admin user
+      // Create super admin user with NULL tenant_id
       await pool.query(`
-        INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
         superAdminUserId,
-        superAdminTenantId,
+        null,  // super_admin users have NULL tenant_id
         superAdminEmail,
         hashedPassword,
-        'System',
-        'Admin',
+        'System Admin',
         'super_admin',
-        'active'
+        true
       ]);
 
       console.log('Super admin user created successfully');
@@ -98,17 +83,16 @@ async function seedDatabase() {
       
       // Create tenant admin user
       await pool.query(`
-        INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
         tenantAdminId,
         tenantId,
         'admin@demo.com',
         hashedPassword,
-        'Demo',
-        'Admin',
+        'Demo Admin',  // full_name instead of first_name, last_name
         'tenant_admin',
-        'active'
+        true  // is_active instead of status
       ]);
 
       console.log('Sample tenant with admin created successfully');
@@ -193,17 +177,16 @@ async function seedDatabase() {
           const hashedPassword = await bcrypt.hash('User@123', 10);
           
           await pool.query(`
-            INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, is_active) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
           `, [
             newUserId,
             demoTenantId,
             'user@demo.com',
             hashedPassword,
-            'Demo',
-            'User',
+            'Demo User',  // full_name instead of first_name, last_name
             'user',
-            'active'
+            true  // is_active instead of status
           ]);
           
           userId = newUserId;

@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 // Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn(() => Promise.resolve({ rows: [] }))
+    query: jest.fn()
   }
 }));
 
@@ -17,69 +17,154 @@ const app = require('../src/server');
 const { pool } = require('../src/config/database');
 
 describe('Project API Endpoints', () => {
-  const validToken = jwt.sign(
-    { id: 'user-id', tenantId: 'tenant-id', role: 'user' },
-    process.env.JWT_SECRET || 'test-secret'
-  );
-  
+  // Mock users for different roles
+  const mockTenantAdmin = {
+    id: 'admin-user-id',
+    email: 'admin@test.com',
+    full_name: 'Test Admin',
+    role: 'tenant_admin',
+    tenant_id: 'tenant-id',
+    is_active: true
+  };
+
+  const mockRegularUser = {
+    id: 'regular-user-id',
+    email: 'user@test.com',
+    full_name: 'Regular User',
+    role: 'user',
+    tenant_id: 'tenant-id',
+    is_active: true
+  };
+
+  const mockSuperAdmin = {
+    id: 'super-admin-id',
+    email: 'superadmin@test.com',
+    full_name: 'Super Admin',
+    role: 'super_admin',
+    tenant_id: null,
+    is_active: true
+  };
+
+  const mockProject = {
+    id: 'project-id',
+    name: 'Test Project',
+    description: 'Test Description',
+    status: 'active',
+    tenant_id: 'tenant-id',
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+
+  const mockNonExistentProject = {
+    id: 'non-existent',
+    name: 'Non Existent Project',
+    description: 'Test Description',
+    status: 'active',
+    tenant_id: 'tenant-id',
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+
+  // Create JWT tokens
   const tenantAdminToken = jwt.sign(
-    { id: 'admin-id', tenantId: 'tenant-id', role: 'tenant_admin' },
-    process.env.JWT_SECRET || 'test-secret'
-  );
-  
-  const superAdminToken = jwt.sign(
-    { id: 'super-admin-id', tenantId: null, role: 'super_admin' },
+    { userId: mockTenantAdmin.id, tenantId: mockTenantAdmin.tenant_id, role: mockTenantAdmin.role },
     process.env.JWT_SECRET || 'test-secret'
   );
 
+  const superAdminToken = jwt.sign(
+    { userId: mockSuperAdmin.id, tenantId: mockSuperAdmin.tenant_id, role: mockSuperAdmin.role },
+    process.env.JWT_SECRET || 'test-secret'
+  );
+
+  const regularUserToken = jwt.sign(
+    { userId: mockRegularUser.id, tenantId: mockRegularUser.tenant_id, role: mockRegularUser.role },
+    process.env.JWT_SECRET || 'test-secret'
+  );
+
+  beforeEach(() => {
+    // Reset all mocks before each test
+    jest.clearAllMocks();
+    
+    // Set up default mock implementation that handles authentication queries
+    pool.query.mockImplementation((query, params) => {
+      // Handle authentication middleware query (SELECT user by ID)
+      if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+        const userId = params && params[0];
+        
+        if (userId === mockTenantAdmin.id) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (userId === mockRegularUser.id) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (userId === mockSuperAdmin.id) {
+          return Promise.resolve({ rows: [mockSuperAdmin] });
+        } else {
+          return Promise.resolve({ rows: [] });
+        }
+      }
+      
+      // Default response for other queries
+      return Promise.resolve({ rows: [] });
+    });
+  });
+
   afterEach(() => {
+    // Clear all mocks after each test
     jest.clearAllMocks();
   });
 
   describe('POST /api/projects', () => {
     it('should create a new project for authenticated user', async () => {
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT max_projects FROM tenants WHERE id = $1')) {
+          return Promise.resolve({ rows: [{ max_projects: 10 }] }); // Tenant limit
+        } else if (query && query.includes('SELECT COUNT(*) as count FROM projects WHERE tenant_id = $1')) {
+          return Promise.resolve({ rows: [{ count: '2' }] }); // Current project count
+        } else if (query && query.includes('INSERT INTO projects')) {
+          // Create a new project object with the sent data
+          const newProject = { ...mockProject, name: projectData.name, description: projectData.description, status: projectData.status };
+          return Promise.resolve({ rows: [newProject] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const projectData = {
-        name: 'Test Project',
-        description: 'Test Description'
+        name: 'New Project',
+        description: 'New Project Description',
+        status: 'active'
       };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock tenant limit check in createProject function
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ max_projects: 5 }] }); // Tenant limit check
-      // Mock project count check in createProject function
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Project count
-      // Mock project creation
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id', name: 'Test Project', description: 'Test Description', tenant_id: 'tenant-id', created_by: 'user-id', status: 'active', created_at: new Date(), updated_at: new Date() }] }); // Insert project
-      // Mock audit log insertion
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Audit log
-      
+
       const response = await request(app)
         .post('/api/projects')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
         .send(projectData)
         .expect(201);
-      
+
       expect(response.body.success).toBe(true);
       expect(response.body.data.name).toBe(projectData.name);
     });
 
     it('should return 400 for invalid project data', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .post('/api/projects')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
         .send({}) // Empty data
         .expect(400);
-      
+
       expect(response.body.success).toBe(false);
     });
 
@@ -89,7 +174,7 @@ describe('Project API Endpoints', () => {
         .set('Authorization', 'Bearer invalid-token')
         .send({ name: 'Test Project' })
         .expect(401);
-      
+
       expect(response.body.success).toBe(false);
     });
   });
@@ -97,24 +182,34 @@ describe('Project API Endpoints', () => {
   describe('GET /api/projects', () => {
     it('should return projects for authenticated user', async () => {
       const mockProjects = [
-        { id: 'project1', name: 'Project 1', description: 'Description 1', tenant_id: 'tenant-id' },
-        { id: 'project2', name: 'Project 2', description: 'Description 2', tenant_id: 'tenant-id' }
+        { id: 'project1', name: 'Project One', description: 'Description 1', status: 'active', created_at: new Date(), task_count: 0 },
+        { id: 'project2', name: 'Project Two', description: 'Description 2', status: 'active', created_at: new Date(), task_count: 0 }
       ];
+
+      // Clear any existing mock implementation and set up specific mocks for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockClear();
       
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock listProjects queries
-      pool.query
-        .mockResolvedValueOnce({ rows: mockProjects }); // Get projects
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Count query
+      // Mock implementation that handles all queries for this specific test
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          // Authentication query
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT p.*, (SELECT COUNT(*) FROM tasks WHERE project_id = p.id AND tenant_id')) {
+          // Main projects query
+          return Promise.resolve({ rows: mockProjects });
+        } else if (query && query.includes('SELECT COUNT(*) as count FROM projects WHERE tenant_id')) {
+          // Count query for pagination
+          return Promise.resolve({ rows: [{ count: '2' }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
       
       const response = await request(app)
         .get('/api/projects')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${regularUserToken}`)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(2);
     });
@@ -124,115 +219,99 @@ describe('Project API Endpoints', () => {
         .get('/api/projects')
         .set('Authorization', 'Bearer invalid-token')
         .expect(401);
-      
+
       expect(response.body.success).toBe(false);
     });
   });
 
   describe('GET /api/projects/:projectId', () => {
     it('should return project details for authorized user', async () => {
-      const mockProject = {
-        id: 'project-id',
-        name: 'Test Project',
-        description: 'Test Description',
-        tenant_id: 'tenant-id',
-        created_by: 'user-id',
-        status: 'active',
-        created_at: new Date(),
-        updated_at: new Date()
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock getProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [mockProject] }); // Get project
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ total_tasks: '5', todo_count: '2', in_progress_count: '2', completed_count: '1' }] }); // Task stats
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] });
+        } else if (query && query.includes('SELECT COUNT(*) as total_tasks')) {
+          return Promise.resolve({ rows: [{ total_tasks: 0, todo_count: 0, in_progress_count: 0, completed_count: 0 }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .get('/api/projects/project-id')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${regularUserToken}`)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
-      expect(response.body.data.id).toBe('project-id');
+      expect(response.body.data.name).toBe(mockProject.name);
     });
 
     it('should return project details for super admin', async () => {
-      const mockProject = {
-        id: 'project-id',
-        name: 'Test Project',
-        description: 'Test Description',
-        tenant_id: 'other-tenant-id',
-        created_by: 'user-id',
-        status: 'active',
-        created_at: new Date(),
-        updated_at: new Date()
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
-      // Mock getProject queries for super_admin
-      pool.query
-        .mockResolvedValueOnce({ rows: [mockProject] }); // Get project
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ total_tasks: '5', todo_count: '2', in_progress_count: '2', completed_count: '1' }] }); // Task stats
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockSuperAdmin] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          // For super admin, the tenant isolation might be handled differently
+          // or the project might be found based on different logic
+          return Promise.resolve({ rows: [mockProject] });
+        } else if (query && query.includes('SELECT COUNT(*) as total_tasks')) {
+          return Promise.resolve({ rows: [{ total_tasks: 0, todo_count: 0, in_progress_count: 0, completed_count: 0 }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .get('/api/projects/project-id')
         .set('Authorization', `Bearer ${superAdminToken}`)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
-      expect(response.body.data.id).toBe('project-id');
+      expect(response.body.data.name).toBe(mockProject.name);
     });
 
     it('should return 404 for non-existent project', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock getProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Project not found
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT id, name, description, status, created_at FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [] }); // No project found
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .get('/api/projects/non-existent')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${regularUserToken}`)
         .expect(404);
-      
+
       expect(response.body.success).toBe(false);
     });
 
     it('should return 404 for unauthorized access to project from different tenant', async () => {
-      const mockProject = {
-        id: 'project-id',
-        name: 'Test Project',
-        description: 'Test Description',
-        tenant_id: 'different-tenant-id',
-        created_by: 'other-user-id',
-        status: 'active',
-        created_at: new Date(),
-        updated_at: new Date()
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock getProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [mockProject] }); // Get project from different tenant
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT id, name, description, status, created_at FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [] }); // Project not found in user's tenant
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
-        .get('/api/projects/project-id')
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(404); // Changed from 403 to 404 for tenant isolation
-      
+        .get('/api/projects/project-from-different-tenant')
+        .set('Authorization', `Bearer ${regularUserToken}`)
+        .expect(404);
+
       expect(response.body.success).toBe(false);
     });
-
   });
 
   describe('PUT /api/projects/:projectId', () => {
@@ -241,135 +320,146 @@ describe('Project API Endpoints', () => {
         name: 'Updated Project Name',
         description: 'Updated Description'
       };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id', created_by: 'user-id' }] }); // Get project
-      // Mock audit log insertion
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Audit log
-      
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] }); // Project exists and belongs to tenant
+        } else if (query && query.includes('UPDATE projects SET')) {
+          return Promise.resolve({ rows: [mockProject] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .put('/api/projects/project-id')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
         .send(updateData)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
     });
 
     it('should return 404 for non-existent project', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Project not found
-      
+      const updateData = {
+        name: 'Updated Project Name'
+      };
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT id, tenant_id FROM projects WHERE id = $1')) {
+          return Promise.resolve({ rows: [] }); // Project not found
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .put('/api/projects/non-existent')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send({ name: 'Updated Name' })
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .send(updateData)
         .expect(404);
-      
+
       expect(response.body.success).toBe(false);
     });
 
     it('should return 403 for unauthorized project update', async () => {
-      const mockProject = {
-        id: 'project-id',
-        name: 'Test Project',
-        tenant_id: 'different-tenant-id'
+      const updateData = {
+        name: 'Updated Project Name'
       };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [mockProject] }); // Get project from different tenant
-      
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] }); // Project exists
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .put('/api/projects/project-id')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send({ name: 'Updated Name' })
-        .expect(403);
-      
+        .set('Authorization', `Bearer ${regularUserToken}`)
+        .send(updateData)
+        .expect(403); // Will return 403 because user is not tenant_admin
+
       expect(response.body.success).toBe(false);
     });
   });
 
   describe('DELETE /api/projects/:projectId', () => {
     it('should delete project for authorized user', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-id', email: 'admin@test.com', full_name: 'Admin User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock deleteProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id', created_by: 'admin-id' }] }); // Get project
-      // Mock delete tasks
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Delete tasks
-      // Mock delete project
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id' }] }); // Delete project
-      // Mock audit log insertion
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Audit log
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] }); // Project exists and belongs to tenant
+        } else if (query && query.includes('DELETE FROM projects WHERE id = $1')) {
+          return Promise.resolve({ rows: [] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .delete('/api/projects/project-id')
         .set('Authorization', `Bearer ${tenantAdminToken}`)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
       expect(response.body.message).toBe('Project deleted successfully');
     });
 
     it('should return 404 for non-existent project', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-id', email: 'admin@test.com', full_name: 'Admin User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock deleteProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Project not found
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT tenant_id FROM projects WHERE id = $1')) {
+          return Promise.resolve({ rows: [] }); // Project not found
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .delete('/api/projects/non-existent')
         .set('Authorization', `Bearer ${tenantAdminToken}`)
         .expect(404);
-      
+
       expect(response.body.success).toBe(false);
     });
 
-    it('should return 404 for unauthorized project deletion', async () => {
-      const mockProject = {
-        id: 'project-id',
-        name: 'Test Project',
-        tenant_id: 'different-tenant-id',
-        created_by: 'other-user-id',
-        status: 'active',
-        created_at: new Date(),
-        updated_at: new Date()
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock deleteProject queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [mockProject] }); // Get project from different tenant
-      
+    it('should return 403 for unauthorized project deletion', async () => {
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] }); // Project exists
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .delete('/api/projects/project-id')
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(404); // Changed from 403 to 404 for tenant isolation
-      
+        .set('Authorization', `Bearer ${regularUserToken}`)
+        .expect(403); // Should return 403 since user is not tenant_admin
+
       expect(response.body.success).toBe(false);
     });
-
   });
 });

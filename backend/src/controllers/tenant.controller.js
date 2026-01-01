@@ -259,7 +259,7 @@ exports.updateTenant = async (req, res) => {
 
     // Log action
     await logAction({
-      tenantId: req.user.tenantId,
+      tenantId: user.role === 'super_admin' ? tenantId : user.tenant_id,
       userId: userId,
       action: 'UPDATE_TENANT',
       entityType: 'tenant',

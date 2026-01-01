@@ -29,7 +29,7 @@ async function authenticate(req, res, next) {
     // Fetch user from database to ensure they still exist and are active
     const userResult = await pool.query(
       'SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id = $1',
-      [decoded.id]
+      [decoded.userId]
     );
     
     if (userResult.rows.length === 0) {

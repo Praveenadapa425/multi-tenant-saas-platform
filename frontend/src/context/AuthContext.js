@@ -68,7 +68,13 @@ export const AuthProvider = ({ children }) => {
         setUser(response.data.data.user);
         setToken(response.data.data.token);
         localStorage.setItem('token', response.data.data.token);
-        localStorage.setItem('tenantSubdomain', tenantSubdomain);
+        // Only store tenantSubdomain if it's provided (not for super_admin users)
+        if (tenantSubdomain) {
+          localStorage.setItem('tenantSubdomain', tenantSubdomain);
+        } else {
+          // Remove any existing tenantSubdomain from localStorage for super_admin users
+          localStorage.removeItem('tenantSubdomain');
+        }
         return { success: true };
       } else {
         setError(response.data.message);

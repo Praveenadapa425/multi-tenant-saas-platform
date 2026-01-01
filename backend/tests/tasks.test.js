@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 // Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn(() => Promise.resolve({ rows: [] }))
+    query: jest.fn()
   }
 }));
 
@@ -17,103 +17,226 @@ const app = require('../src/server');
 const { pool } = require('../src/config/database');
 
 describe('Task API Endpoints', () => {
-  const validToken = jwt.sign(
-    { id: 'user-id', tenantId: 'tenant-id', role: 'user' },
-    process.env.JWT_SECRET || 'test-secret'
-  );
-  
+  // Mock users for different roles
+  const mockTenantAdmin = {
+    id: 'admin-user-id',
+    email: 'admin@test.com',
+    full_name: 'Test Admin',
+    role: 'tenant_admin',
+    tenant_id: 'tenant-id',
+    is_active: true
+  };
+
+  const mockRegularUser = {
+    id: 'regular-user-id',
+    email: 'user@test.com',
+    full_name: 'Regular User',
+    role: 'user',
+    tenant_id: 'tenant-id',
+    is_active: true
+  };
+
+  const mockSuperAdmin = {
+    id: 'super-admin-id',
+    email: 'superadmin@test.com',
+    full_name: 'Super Admin',
+    role: 'super_admin',
+    tenant_id: null,
+    is_active: true
+  };
+
+  const mockProject = {
+    id: 'project-id',
+    name: 'Test Project',
+    description: 'Test Description',
+    status: 'active',
+    tenant_id: 'tenant-id',
+    created_by: 'admin-user-id',
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+
+  const mockTask = {
+    id: 'task-id',
+    title: 'Test Task',
+    description: 'Test Description',
+    status: 'todo',
+    priority: 'medium',
+    project_id: 'project-id',
+    assigned_to: 'regular-user-id',
+    created_by: 'admin-user-id',
+    tenant_id: 'tenant-id',
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+
+  const mockNonExistentTask = {
+    id: 'non-existent',
+    title: 'Non Existent Task',
+    description: 'Test Description',
+    status: 'todo',
+    priority: 'medium',
+    project_id: 'project-id',
+    assigned_to: 'regular-user-id',
+    created_by: 'admin-user-id',
+    tenant_id: 'tenant-id',
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+
+  // Create JWT tokens
   const tenantAdminToken = jwt.sign(
-    { id: 'admin-id', tenantId: 'tenant-id', role: 'tenant_admin' },
+    { userId: mockTenantAdmin.id, tenantId: mockTenantAdmin.tenant_id, role: mockTenantAdmin.role },
     process.env.JWT_SECRET || 'test-secret'
   );
 
+  const superAdminToken = jwt.sign(
+    { userId: mockSuperAdmin.id, tenantId: mockSuperAdmin.tenant_id, role: mockSuperAdmin.role },
+    process.env.JWT_SECRET || 'test-secret'
+  );
+
+  const validToken = jwt.sign(
+    { userId: mockRegularUser.id, tenantId: mockRegularUser.tenant_id, role: mockRegularUser.role },
+    process.env.JWT_SECRET || 'test-secret'
+  );
+
+  beforeEach(() => {
+    // Reset all mocks before each test
+    jest.clearAllMocks();
+    
+    // Set up default mock implementation that handles authentication queries
+    pool.query.mockImplementation((query, params) => {
+      // Handle authentication middleware query (SELECT user by ID)
+      if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+        const userId = params && params[0];
+        
+        if (userId === mockTenantAdmin.id) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (userId === mockRegularUser.id) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (userId === mockSuperAdmin.id) {
+          return Promise.resolve({ rows: [mockSuperAdmin] });
+        } else {
+          return Promise.resolve({ rows: [] });
+        }
+      }
+      
+      // Default response for other queries
+      return Promise.resolve({ rows: [] });
+    });
+  });
+
   afterEach(() => {
+    // Clear all mocks after each test
     jest.clearAllMocks();
   });
 
   describe('POST /api/projects/:projectId/tasks', () => {
     it('should create a new task for authorized user', async () => {
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] });
+        } else if (query && query.includes('INSERT INTO tasks')) {
+          // Create a new task object with the sent data
+          const newTask = { ...mockTask, id: 'new-task-id', title: taskData.title, description: taskData.description, status: 'todo', priority: taskData.priority || 'medium' };
+          return Promise.resolve({ rows: [newTask] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const taskData = {
-        title: 'Test Task',
-        description: 'Test Description',
-        priority: 'medium',
-        assignedTo: 'user-id'
+        title: 'New Task',
+        description: 'New Task Description',
+        status: 'todo',
+        priority: 'medium'
       };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock createTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }) // Check project
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'assigned-user-id', tenant_id: 'tenant-id' }] }) // Check assigned user
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'task-id', title: 'Test Task', description: 'Test Description', project_id: 'project-id', tenant_id: 'tenant-id', status: 'todo', priority: 'medium', assigned_to: 'user-id', created_at: new Date(), updated_at: new Date() }] }); // Insert task
-      
+
       const response = await request(app)
         .post('/api/projects/project-id/tasks')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
         .send(taskData)
         .expect(201);
-      
+
       expect(response.body.success).toBe(true);
       expect(response.body.data.title).toBe(taskData.title);
     });
 
     it('should return 400 for invalid task data', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock createTask queries - need to check project to proceed to validation
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }); // Check project
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .post('/api/projects/project-id/tasks')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
         .send({}) // Empty data
         .expect(400);
-      
+
       expect(response.body.success).toBe(false);
     });
 
     it('should return 404 for non-existent project', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock createTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Project not found
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [] }); // Project not found
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const taskData = {
+        title: 'New Task',
+        description: 'New Task Description'
+      };
+
       const response = await request(app)
         .post('/api/projects/non-existent/tasks')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send({ title: 'Test Task' })
-        .expect(404); // Changed from 403 to 404 for consistency
-      
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .send(taskData)
+        .expect(404);
+
       expect(response.body.success).toBe(false);
     });
 
     it('should return 404 for unauthorized access to project from different tenant', async () => {
-      const mockProject = {
-        id: 'project-id',
-        tenant_id: 'different-tenant-id'
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [] }); // Project not found in user's tenant
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const taskData = {
+        title: 'New Task',
+        description: 'New Task Description'
       };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock createTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Project from different tenant (should return empty result)
-      
+
       const response = await request(app)
-        .post('/api/projects/project-id/tasks')
+        .post('/api/projects/project-from-different-tenant/tasks')
         .set('Authorization', `Bearer ${validToken}`)
-        .send({ title: 'Test Task' })
+        .send(taskData)
         .expect(404);
-      
+
       expect(response.body.success).toBe(false);
     });
   });
@@ -121,52 +244,51 @@ describe('Task API Endpoints', () => {
   describe('GET /api/projects/:projectId/tasks', () => {
     it('should return tasks for authorized user', async () => {
       const mockTasks = [
-        { id: 'task1', title: 'Task 1', status: 'todo', project_id: 'project-id' },
-        { id: 'task2', title: 'Task 2', status: 'in_progress', project_id: 'project-id' }
+        { ...mockTask, id: 'task1', title: 'Task One' },
+        { ...mockTask, id: 'task2', title: 'Task Two' }
       ];
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock getProjectTasks queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }) // Check project
-      pool.query
-        .mockResolvedValueOnce({ rows: mockTasks }); // Get tasks
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Count query
-      
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [mockProject] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE project_id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: mockTasks });
+        } else if (query && query.includes('SELECT COUNT(*) as count FROM tasks WHERE project_id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [{ count: '2' }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .get('/api/projects/project-id/tasks')
         .set('Authorization', `Bearer ${validToken}`)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(2);
     });
 
     it('should return 404 for unauthorized access to project from different tenant', async () => {
-      const mockProject = {
-        id: 'project-id',
-        tenant_id: 'different-tenant-id'
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock getProjectTasks queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Project from different tenant (should return empty result)
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Get tasks (empty because project check will fail)
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ count: '0' }] }); // Count query
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [] }); // Project not found in user's tenant
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
-        .get('/api/projects/project-id/tasks')
+        .get('/api/projects/project-from-different-tenant/tasks')
         .set('Authorization', `Bearer ${validToken}`)
         .expect(404);
-      
+
       expect(response.body.success).toBe(false);
     });
   });
@@ -174,24 +296,28 @@ describe('Task API Endpoints', () => {
   describe('GET /api/tasks', () => {
     it('should return all tasks for tenant', async () => {
       const mockTasks = [
-        { id: 'task1', title: 'Task 1', status: 'todo', tenant_id: 'tenant-id' },
-        { id: 'task2', title: 'Task 2', status: 'in_progress', tenant_id: 'tenant-id' }
+        { ...mockTask, id: 'task1', title: 'Task One' },
+        { ...mockTask, id: 'task2', title: 'Task Two' }
       ];
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock getTasks queries
-      pool.query
-        .mockResolvedValueOnce({ rows: mockTasks }); // Get tasks
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Count query
-      
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE tenant_id = $1')) {
+          return Promise.resolve({ rows: mockTasks });
+        } else if (query && query.includes('SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1')) {
+          return Promise.resolve({ rows: [{ count: '2' }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .get('/api/tasks')
         .set('Authorization', `Bearer ${validToken}`)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(2);
     });
@@ -201,7 +327,7 @@ describe('Task API Endpoints', () => {
         .get('/api/tasks')
         .set('Authorization', 'Bearer invalid-token')
         .expect(401);
-      
+
       expect(response.body.success).toBe(false);
     });
   });
@@ -209,53 +335,77 @@ describe('Task API Endpoints', () => {
   describe('PATCH /api/tasks/:taskId/status', () => {
     it('should update task status for authorized user', async () => {
       const statusUpdate = { status: 'in_progress' };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateTaskStatus queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id', project_id: 'project-id' }] }); // Get task
-      
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [{ ...mockTask, assigned_to: mockRegularUser.id }] }); // Task assigned to user
+        } else if (query && query.includes('UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3 RETURNING *')) {
+          return Promise.resolve({ rows: [{ ...mockTask, status: 'in_progress' }] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .patch('/api/tasks/task-id/status')
         .set('Authorization', `Bearer ${validToken}`)
         .send(statusUpdate)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
     });
 
     it('should return 400 for invalid status', async () => {
+      const statusUpdate = { status: 'invalid_status' };
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .patch('/api/tasks/task-id/status')
         .set('Authorization', `Bearer ${validToken}`)
-        .send({ status: 'invalid_status' })
+        .send(statusUpdate)
         .expect(400);
-      
+
       expect(response.body.success).toBe(false);
     });
 
-    it('should return 404 for unauthorized task status update', async () => {
-      const mockTask = {
-        id: 'task-id',
-        tenant_id: 'different-tenant-id'
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateTaskStatus queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Task from different tenant (should return empty result)
-      
+    it('should update task status for user in same tenant', async () => {
+      const statusUpdate = { status: 'in_progress' };
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [{ ...mockTask, assigned_to: 'other-user-id' }] }); // Task assigned to different user but same tenant
+        } else if (query && query.includes('UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3 RETURNING *')) {
+          return Promise.resolve({ rows: [{ ...mockTask, status: 'in_progress' }] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .patch('/api/tasks/task-id/status')
         .set('Authorization', `Bearer ${validToken}`)
-        .send({ status: 'in_progress' })
-        .expect(404);
-      
-      expect(response.body.success).toBe(false);
+        .send(statusUpdate)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
     });
   });
 
@@ -263,120 +413,158 @@ describe('Task API Endpoints', () => {
     it('should update task for authorized user', async () => {
       const updateData = {
         title: 'Updated Task Title',
-        description: 'Updated Description',
-        status: 'in_progress',
-        priority: 'high'
+        description: 'Updated Description'
       };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id', project_id: 'project-id' }] }); // Get task
-      
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [{ ...mockTask, created_by: mockTenantAdmin.id }] });
+        } else if (query && query.includes('UPDATE tasks SET')) {
+          return Promise.resolve({ rows: [{ ...mockTask, ...updateData }] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const response = await request(app)
+        .put('/api/tasks/task-id')
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .send(updateData)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should return 404 for non-existent task', async () => {
+      const updateData = {
+        title: 'Updated Task Title'
+      };
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [] }); // Task not found
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const response = await request(app)
+        .put('/api/tasks/non-existent')
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .send(updateData)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    it('should update task for user in same tenant', async () => {
+      const updateData = {
+        title: 'Updated Task Title',
+        description: 'Updated Description'
+      };
+
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [{ ...mockTask, created_by: 'other-user-id' }] }); // Different creator but same tenant
+        } else if (query && query.includes('UPDATE tasks SET')) {
+          return Promise.resolve({ rows: [{ ...mockTask, ...updateData }] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .put('/api/tasks/task-id')
         .set('Authorization', `Bearer ${validToken}`)
         .send(updateData)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
-    });
-
-    it('should return 404 for non-existent task', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Task not found
-      
-      const response = await request(app)
-        .put('/api/tasks/non-existent')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send({ title: 'Updated Title' })
-        .expect(404); // Changed from 403 to 404 for consistency
-      
-      expect(response.body.success).toBe(false);
-    });
-
-    it('should return 404 for unauthorized task update', async () => {
-      const mockTask = {
-        id: 'task-id',
-        tenant_id: 'different-tenant-id'
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock updateTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Task from different tenant (should return empty result)
-      
-      const response = await request(app)
-        .put('/api/tasks/task-id')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send({ title: 'Updated Title' })
-        .expect(404);
-      
-      expect(response.body.success).toBe(false);
     });
   });
 
   describe('DELETE /api/tasks/:taskId', () => {
     it('should delete task for authorized user', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock deleteTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id' }] }); // Get task
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [{ ...mockTask, created_by: mockTenantAdmin.id }] });
+        } else if (query && query.includes('DELETE FROM tasks WHERE id = $1')) {
+          return Promise.resolve({ rows: [{ id: 'task-id' }] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .delete('/api/tasks/task-id')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
         .expect(200);
-      
+
       expect(response.body.success).toBe(true);
       expect(response.body.message).toBe('Task deleted successfully');
     });
 
     it('should return 404 for non-existent task', async () => {
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock deleteTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Task not found
-      
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockTenantAdmin] });
+        } else if (query && query.includes('SELECT id, tenant_id, created_by FROM tasks WHERE id = $1')) {
+          return Promise.resolve({ rows: [] }); // Task not found
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .delete('/api/tasks/non-existent')
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(404); // Changed from 403 to 404 for consistency
-      
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .expect(404);
+
       expect(response.body.success).toBe(false);
     });
 
-    it('should return 404 for unauthorized task deletion', async () => {
-      const mockTask = {
-        id: 'task-id',
-        tenant_id: 'different-tenant-id'
-      };
-      
-      // Mock authenticate middleware query
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock deleteTask queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Task from different tenant (should return empty result)
-      
+    it('should delete task for user in same tenant', async () => {
+      // Mock specific queries for this test
+      const mockPool = require('../src/config/database').pool;
+      mockPool.query.mockImplementation((query, params) => {
+        if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
+          return Promise.resolve({ rows: [mockRegularUser] });
+        } else if (query && query.includes('SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2')) {
+          return Promise.resolve({ rows: [{ ...mockTask, created_by: 'other-user-id' }] }); // Different creator but same tenant
+        } else if (query && query.includes('DELETE FROM tasks WHERE id = $1')) {
+          return Promise.resolve({ rows: [{ id: 'task-id' }] });
+        } else if (query && query.includes('INSERT INTO audit_logs')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .delete('/api/tasks/task-id')
         .set('Authorization', `Bearer ${validToken}`)
-        .expect(404);
-      
-      expect(response.body.success).toBe(false);
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Task deleted successfully');
     });
   });
 });

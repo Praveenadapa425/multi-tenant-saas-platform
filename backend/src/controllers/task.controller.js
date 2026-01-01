@@ -144,7 +144,7 @@ async function listTasks(req, res) {
       pool.query(countQuery, countParams)
     ]);
 
-    const totalCount = parseInt(countResult.rows[0].count);
+    const totalCount = countResult.rows && countResult.rows[0] && countResult.rows[0].count ? parseInt(countResult.rows[0].count) : 0;
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
     res.status(200).json({
@@ -413,59 +413,75 @@ async function listAllTasks(req, res) {
   const offset = (parseInt(page) - 1) * parseInt(limit);
 
   try {
-    let query = 'SELECT * FROM tasks WHERE tenant_id = $1';
-    let countQuery = 'SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1';
-    const params = [req.user.tenantId];
-    const countParams = [req.user.tenantId];
+    let query = 'SELECT * FROM tasks';
+    let countQuery = 'SELECT COUNT(*) as count FROM tasks';
+    let whereClause = req.user.role === 'super_admin' ? '' : ' WHERE tenant_id = $1';
+    query += whereClause;
+    countQuery += whereClause;
+    
+    const params = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
+    const countParams = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
 
     if (status) {
-      query += ' AND status = $' + (params.length + 1);
-      countQuery += ' AND status = $' + (countParams.length + 1);
+      const paramIndex = params.length + 1;
+      query += (whereClause ? ' AND' : ' WHERE') + ` status = $${paramIndex}`;
+      countQuery += (whereClause ? ' AND' : ' WHERE') + ` status = $${paramIndex}`;
       params.push(status);
       countParams.push(status);
+      whereClause = ' WHERE'; // Update for potential other conditions
     }
 
     if (priority) {
-      query += ' AND priority = $' + (params.length + 1);
-      countQuery += ' AND priority = $' + (countParams.length + 1);
+      const paramIndex = params.length + 1;
+      query += (whereClause ? ' AND' : ' WHERE') + ` priority = $${paramIndex}`;
+      countQuery += (whereClause ? ' AND' : ' WHERE') + ` priority = $${paramIndex}`;
       params.push(priority);
       countParams.push(priority);
+      whereClause = ' WHERE'; // Update for potential other conditions
     }
 
     if (assignedTo) {
-      query += ' AND assigned_to = $' + (params.length + 1);
-      countQuery += ' AND assigned_to = $' + (countParams.length + 1);
+      const paramIndex = params.length + 1;
+      query += (whereClause ? ' AND' : ' WHERE') + ` assigned_to = $${paramIndex}`;
+      countQuery += (whereClause ? ' AND' : ' WHERE') + ` assigned_to = $${paramIndex}`;
       params.push(assignedTo);
       countParams.push(assignedTo);
+      whereClause = ' WHERE'; // Update for potential other conditions
     }
 
     if (search) {
-      query += ' AND (title ILIKE $' + (params.length + 1) + ' OR description ILIKE $' + (params.length + 1) + ')';
-      countQuery += ' AND (title ILIKE $' + (countParams.length + 1) + ' OR description ILIKE $' + (countParams.length + 1) + ')';
+      const paramIndex = params.length + 1;
+      query += (whereClause ? ' AND' : ' WHERE') + ` (title ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`;
+      countQuery += (whereClause ? ' AND' : ' WHERE') + ` (title ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
       countParams.push(`%${search}%`);
     }
 
-    query += ' ORDER BY created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
-    params.push(parseInt(limit), offset);
+    query += ' ORDER BY created_at DESC';
+    if (limit !== 'all') {
+      const limitParamIndex = params.length + 1;
+      const offsetParamIndex = params.length + 2;
+      query += ` LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`;
+      params.push(parseInt(limit), offset);
+    }
 
     const [tasksResult, countResult] = await Promise.all([
       pool.query(query, params),
       pool.query(countQuery, countParams)
     ]);
 
-    const totalCount = parseInt(countResult.rows[0].count);
-    const totalPages = Math.ceil(totalCount / parseInt(limit));
+    const totalCount = countResult.rows && countResult.rows[0] && countResult.rows[0].count ? parseInt(countResult.rows[0].count) : 0;
+    const totalPages = limit !== 'all' ? Math.ceil(totalCount / parseInt(limit)) : 1;
 
     res.status(200).json({
       success: true,
       data: tasksResult.rows,
-      pagination: {
+      pagination: limit !== 'all' ? {
         page: parseInt(page),
         limit: parseInt(limit),
         total: totalCount,
         pages: totalPages
-      }
+      } : undefined
     });
   } catch (error) {
     console.error('Error listing all tasks:', error);

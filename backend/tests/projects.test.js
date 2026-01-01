@@ -54,7 +54,7 @@ describe('Project API Endpoints', () => {
         .mockResolvedValueOnce({ rows: [{ count: '2' }] }); // Project count
       // Mock project creation
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'project-id', name: 'Test Project', tenant_id: 'tenant-id' }] }); // Insert project
+        .mockResolvedValueOnce({ rows: [{ id: 'project-id', name: 'Test Project', description: 'Test Description', tenant_id: 'tenant-id', created_by: 'user-id', status: 'active', created_at: new Date(), updated_at: new Date() }] }); // Insert project
       // Mock audit log insertion
       pool.query
         .mockResolvedValueOnce({ rows: [] }); // Audit log
@@ -66,10 +66,14 @@ describe('Project API Endpoints', () => {
         .expect(201);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data.project.name).toBe(projectData.name);
+      expect(response.body.data.name).toBe(projectData.name);
     });
 
     it('should return 400 for invalid project data', async () => {
+      // Mock authenticate middleware query
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      
       const response = await request(app)
         .post('/api/projects')
         .set('Authorization', `Bearer ${validToken}`)
@@ -131,7 +135,11 @@ describe('Project API Endpoints', () => {
         id: 'project-id',
         name: 'Test Project',
         description: 'Test Description',
-        tenant_id: 'tenant-id'
+        tenant_id: 'tenant-id',
+        created_by: 'user-id',
+        status: 'active',
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
       // Mock authenticate middleware query
@@ -149,7 +157,7 @@ describe('Project API Endpoints', () => {
         .expect(200);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data.project.id).toBe('project-id');
+      expect(response.body.data.id).toBe('project-id');
     });
 
     it('should return project details for super admin', async () => {
@@ -157,7 +165,11 @@ describe('Project API Endpoints', () => {
         id: 'project-id',
         name: 'Test Project',
         description: 'Test Description',
-        tenant_id: 'other-tenant-id'
+        tenant_id: 'other-tenant-id',
+        created_by: 'user-id',
+        status: 'active',
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
       // Mock authenticate middleware query
@@ -175,7 +187,7 @@ describe('Project API Endpoints', () => {
         .expect(200);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data.project.id).toBe('project-id');
+      expect(response.body.data.id).toBe('project-id');
     });
 
     it('should return 404 for non-existent project', async () => {
@@ -194,12 +206,16 @@ describe('Project API Endpoints', () => {
       expect(response.body.success).toBe(false);
     });
 
-    it('should return 403 for unauthorized access to project from different tenant', async () => {
+    it('should return 404 for unauthorized access to project from different tenant', async () => {
       const mockProject = {
         id: 'project-id',
         name: 'Test Project',
         description: 'Test Description',
-        tenant_id: 'different-tenant-id'
+        tenant_id: 'different-tenant-id',
+        created_by: 'other-user-id',
+        status: 'active',
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
       // Mock authenticate middleware query
@@ -212,10 +228,11 @@ describe('Project API Endpoints', () => {
       const response = await request(app)
         .get('/api/projects/project-id')
         .set('Authorization', `Bearer ${validToken}`)
-        .expect(403);
+        .expect(404); // Changed from 403 to 404 for tenant isolation
       
       expect(response.body.success).toBe(false);
     });
+
   });
 
   describe('PUT /api/projects/:projectId', () => {
@@ -328,11 +345,15 @@ describe('Project API Endpoints', () => {
       expect(response.body.success).toBe(false);
     });
 
-    it('should return 403 for unauthorized project deletion', async () => {
+    it('should return 404 for unauthorized project deletion', async () => {
       const mockProject = {
         id: 'project-id',
         name: 'Test Project',
-        tenant_id: 'different-tenant-id'
+        tenant_id: 'different-tenant-id',
+        created_by: 'other-user-id',
+        status: 'active',
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
       // Mock authenticate middleware query
@@ -345,9 +366,10 @@ describe('Project API Endpoints', () => {
       const response = await request(app)
         .delete('/api/projects/project-id')
         .set('Authorization', `Bearer ${validToken}`)
-        .expect(403);
+        .expect(404); // Changed from 403 to 404 for tenant isolation
       
       expect(response.body.success).toBe(false);
     });
+
   });
 });

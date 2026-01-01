@@ -156,8 +156,11 @@ describe('Tenant API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock updateTenant queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user
-        .mockResolvedValueOnce({ rows: [{ id: 'tenant-id', name: 'Old Name' }] }); // Get tenant
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'tenant-id', name: 'Old Name', subdomain: 'test', status: 'active', subscription_plan: 'free', max_users: 5, max_projects: 5, created_at: new Date(), updated_at: new Date() }] }); // Get tenant
       // Mock audit log insertion
       pool.query
         .mockResolvedValueOnce({ rows: [] }); // Audit log
@@ -169,7 +172,7 @@ describe('Tenant API Endpoints', () => {
         .expect(200);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data.name).toBe(updateData.name);
+      expect(response.body.tenant.name).toBe(updateData.name);
     });
 
     it('should allow super admin to update any tenant', async () => {
@@ -181,11 +184,11 @@ describe('Tenant API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Super admin
-        .mockResolvedValueOnce({ rows: [{ id: 'other-tenant-id', name: 'Old Name' }] }); // Get tenant
-      // Mock audit log insertion
+      // Mock updateTenant queries
       pool.query
-        .mockResolvedValueOnce({ rows: [] }); // Audit log
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }) // Super admin
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'other-tenant-id', name: 'Old Name', subdomain: 'other', status: 'active', subscription_plan: 'free', max_users: 5, max_projects: 5, created_at: new Date(), updated_at: new Date() }] }); // Get tenant
       
       const response = await request(app)
         .put('/api/tenants/other-tenant-id')
@@ -215,6 +218,8 @@ describe('Tenant API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock updateTenant queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }); // Check user
       
       const response = await request(app)
@@ -230,14 +235,17 @@ describe('Tenant API Endpoints', () => {
   describe('GET /api/tenants', () => {
     it('should return all tenants for super admin', async () => {
       const mockTenants = [
-        { id: 'tenant1', name: 'Tenant 1', subdomain: 'tenant1', status: 'active' },
-        { id: 'tenant2', name: 'Tenant 2', subdomain: 'tenant2', status: 'active' }
+        { id: 'tenant1', name: 'Tenant 1', subdomain: 'tenant1', status: 'active', created_at: new Date(), updated_at: new Date() },
+        { id: 'tenant2', name: 'Tenant 2', subdomain: 'tenant2', status: 'active', created_at: new Date(), updated_at: new Date() }
       ];
       
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
+      // Mock listTenants queries
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin' }] }) // Check user role
+      pool.query
         .mockResolvedValueOnce({ rows: mockTenants }); // Get all tenants
       
       const response = await request(app)
@@ -246,7 +254,7 @@ describe('Tenant API Endpoints', () => {
         .expect(200);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(2);
+      expect(response.body.tenants).toHaveLength(2);
     });
 
     it('should return 403 for non-super admin access', async () => {

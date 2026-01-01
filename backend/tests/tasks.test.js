@@ -62,6 +62,13 @@ describe('Task API Endpoints', () => {
     });
 
     it('should return 400 for invalid task data', async () => {
+      // Mock authenticate middleware query
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock createTask queries - need to check project to proceed to validation
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'project-id', tenant_id: 'tenant-id' }] }); // Check project
+      
       const response = await request(app)
         .post('/api/projects/project-id/tasks')
         .set('Authorization', `Bearer ${validToken}`)
@@ -83,7 +90,7 @@ describe('Task API Endpoints', () => {
         .post('/api/projects/non-existent/tasks')
         .set('Authorization', `Bearer ${validToken}`)
         .send({ title: 'Test Task' })
-        .expect(403);
+        .expect(404); // Changed from 403 to 404 for consistency
       
       expect(response.body.success).toBe(false);
     });
@@ -208,7 +215,7 @@ describe('Task API Endpoints', () => {
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
       // Mock updateTaskStatus queries
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id' }] }); // Get task
+        .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id', project_id: 'project-id' }] }); // Get task
       
       const response = await request(app)
         .patch('/api/tasks/task-id/status')
@@ -266,7 +273,7 @@ describe('Task API Endpoints', () => {
         .mockResolvedValueOnce({ rows: [{ id: 'user-id', email: 'user@test.com', full_name: 'Test User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
       // Mock updateTask queries
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id' }] }); // Get task
+        .mockResolvedValueOnce({ rows: [{ id: 'task-id', tenant_id: 'tenant-id', project_id: 'project-id' }] }); // Get task
       
       const response = await request(app)
         .put('/api/tasks/task-id')
@@ -289,7 +296,7 @@ describe('Task API Endpoints', () => {
         .put('/api/tasks/non-existent')
         .set('Authorization', `Bearer ${validToken}`)
         .send({ title: 'Updated Title' })
-        .expect(403);
+        .expect(404); // Changed from 403 to 404 for consistency
       
       expect(response.body.success).toBe(false);
     });
@@ -346,7 +353,7 @@ describe('Task API Endpoints', () => {
       const response = await request(app)
         .delete('/api/tasks/non-existent')
         .set('Authorization', `Bearer ${validToken}`)
-        .expect(403);
+        .expect(404); // Changed from 403 to 404 for consistency
       
       expect(response.body.success).toBe(false);
     });

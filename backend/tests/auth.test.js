@@ -5,7 +5,11 @@ const jwt = require('jsonwebtoken');
 // Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn(() => Promise.resolve({ rows: [] }))
+    query: jest.fn(() => Promise.resolve({ rows: [] })),
+    connect: jest.fn(() => Promise.resolve({
+      query: jest.fn(() => Promise.resolve({ rows: [] })),
+      release: jest.fn()
+    }))
   }
 }));
 
@@ -47,10 +51,22 @@ describe('Authentication API Endpoints', () => {
         updated_at: new Date()
       };
       
-      pool.query.mockResolvedValueOnce({ rows: [] }); // Check if subdomain exists
-      pool.query.mockResolvedValueOnce({ rows: [] }); // Check if email exists
-      pool.query.mockResolvedValueOnce({ rows: [mockTenant] }); // Insert tenant
-      pool.query.mockResolvedValueOnce({ rows: [mockUser] }); // Insert user
+      // Mock the client connection
+      const mockClient = {
+        query: jest.fn(),
+        release: jest.fn()
+      };
+      
+      // Mock the sequence of queries for the transaction
+      pool.connect.mockResolvedValue(mockClient);
+      
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [] }) // Check if subdomain exists
+        .mockResolvedValueOnce({ rows: [] }) // Check if email exists
+        .mockResolvedValueOnce({ rows: [mockTenant] }) // Insert tenant
+        .mockResolvedValueOnce({ rows: [mockUser] }) // Insert user
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
       
       const response = await request(app)
         .post('/api/auth/register-tenant')
@@ -64,7 +80,7 @@ describe('Authentication API Endpoints', () => {
         .expect(201);
         
       expect(response.body.success).toBe(true);
-      expect(response.body.data.tenant).toBeDefined();
+      expect(response.body.data.tenantId).toBeDefined();
       expect(response.body.data.adminUser).toBeDefined();
       expect(response.body.data.adminUser.email).toBe('admin@test.com');
     });
@@ -73,13 +89,23 @@ describe('Authentication API Endpoints', () => {
       const response = await request(app)
         .post('/api/auth/register-tenant')
         .send({})
-        .expect(400);
+        .expect(400); // Validation middleware should return 400
         
       expect(response.body.success).toBe(false);
     });
 
-    it('should return 400 when subdomain already exists', async () => {
-      pool.query.mockResolvedValueOnce({ rows: [{ id: 'existing-tenant' }] }); // Subdomain exists
+    it('should return 409 when subdomain already exists', async () => {
+      // Mock the client connection
+      const mockClient = {
+        query: jest.fn(),
+        release: jest.fn()
+      };
+      
+      pool.connect.mockResolvedValue(mockClient);
+      
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ id: 'existing-tenant' }] }); // Subdomain exists
       
       const response = await request(app)
         .post('/api/auth/register-tenant')
@@ -90,10 +116,10 @@ describe('Authentication API Endpoints', () => {
           adminPassword: 'Password123!',
           adminFullName: 'Test Admin'
         })
-        .expect(400);
+        .expect(409);
         
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('Validation');
+      expect(response.body.message).toBe('Subdomain already exists');
     });
   });
 
@@ -207,8 +233,16 @@ describe('Authentication API Endpoints', () => {
     });
 
     it('should return 401 for invalid credentials', async () => {
+      const hashedPassword = await bcrypt.hash('Password123!', 10);
+      
       pool.query.mockResolvedValueOnce({ rows: [] }); // No super_admin found
-      pool.query.mockResolvedValueOnce({ rows: [] }); // No tenant found (for regular user flow)
+      pool.query.mockResolvedValueOnce({
+        rows: [{
+          id: 'test-tenant-id',
+          status: 'active'
+        }]
+      }); // Tenant exists
+      pool.query.mockResolvedValueOnce({ rows: [] }); // No user found
       
       const response = await request(app)
         .post('/api/auth/login')
@@ -290,8 +324,8 @@ describe('Authentication API Endpoints', () => {
         .expect(200);
         
       expect(response.body.success).toBe(true);
-      expect(response.body.data.user).toBeDefined();
-      expect(response.body.data.user.id).toBe('test-user-id');
+      expect(response.body.data.id).toBeDefined();
+      expect(response.body.data.id).toBe('test-user-id');
     });
 
     it('should return 401 for invalid token', async () => {

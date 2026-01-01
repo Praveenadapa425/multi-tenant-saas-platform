@@ -5,14 +5,23 @@ const bcrypt = require('bcryptjs');
 // Mock the database pool before importing the server
 jest.mock('../src/config/database', () => ({
   pool: {
-    query: jest.fn(() => Promise.resolve({ rows: [] }))
+    query: jest.fn()
   }
+}));
+
+// Mock the audit logger to prevent database calls during tests
+jest.mock('../src/utils/auditLogger', () => ({
+  logAction: jest.fn().mockResolvedValue(null)
 }));
 
 const app = require('../src/server');
 const { pool } = require('../src/config/database');
 
 describe('User API Endpoints', () => {
+  beforeEach(() => {
+    // Reset the pool mock before each test to ensure isolation
+    pool.query.mockClear();
+  });
   const tenantAdminToken = jwt.sign(
     { id: 'admin-user-id', tenantId: 'tenant-id', role: 'tenant_admin' },
     process.env.JWT_SECRET || 'test-secret'
@@ -31,6 +40,7 @@ describe('User API Endpoints', () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
+
 
   describe('POST /api/users', () => {
     it('should add a new user to tenant for tenant admin', async () => {
@@ -64,7 +74,7 @@ describe('User API Endpoints', () => {
         .expect(201);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data.user.email).toBe(userData.email);
+      expect(response.body.data.email).toBe(userData.email);
     });
 
     it('should return 403 for regular user trying to add user', async () => {
@@ -78,6 +88,8 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Check user role for authorization
+      pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', role: 'user', tenant_id: 'tenant-id' }] }); // Check user role
       
       const response = await request(app)
@@ -90,6 +102,19 @@ describe('User API Endpoints', () => {
     });
 
     it('should return 400 for invalid user data', async () => {
+      // Mock authenticate middleware query
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
+      // Mock addUser queries for tenant limit check
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }); // Check user role
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ max_users: 10 }] }); // Tenant limit check
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ count: '3' }] }); // User count check
+      pool.query
+        .mockResolvedValueOnce({ rows: [] }); // Check if email exists
+      
       const response = await request(app)
         .post('/api/users')
         .set('Authorization', `Bearer ${tenantAdminToken}`)
@@ -99,7 +124,7 @@ describe('User API Endpoints', () => {
       expect(response.body.success).toBe(false);
     });
 
-    it('should return 400 when email already exists', async () => {
+    it('should return 409 when email already exists', async () => {
       const userData = {
         fullName: 'New User',
         email: 'existing@test.com',
@@ -107,7 +132,12 @@ describe('User API Endpoints', () => {
         role: 'user'
       };
       
+      // Mock authenticate middleware query
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
       // Mock addUser queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }); // Check user role
       pool.query
         .mockResolvedValueOnce({ rows: [{ max_users: 10 }] }); // Tenant limit check
       pool.query
@@ -119,7 +149,7 @@ describe('User API Endpoints', () => {
         .post('/api/users')
         .set('Authorization', `Bearer ${tenantAdminToken}`)
         .send(userData)
-        .expect(400);
+        .expect(409); // Changed from 400 to 409 for email conflict
       
       expect(response.body.success).toBe(false);
     });
@@ -128,14 +158,16 @@ describe('User API Endpoints', () => {
   describe('GET /api/users', () => {
     it('should return users for authenticated user', async () => {
       const mockUsers = [
-        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user' },
-        { id: 'user2', email: 'user2@test.com', full_name: 'User Two', role: 'user' }
+        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user', is_active: true, created_at: new Date() },
+        { id: 'user2', email: 'user2@test.com', full_name: 'User Two', role: 'user', is_active: true, created_at: new Date() }
       ];
       
-      // Mock authenticate middleware query
+      // Mock authenticate middleware query - this is called by the middleware before the controller
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
       // Mock listUsers queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', role: 'user', tenant_id: 'tenant-id' }] }); // Check user permissions
       pool.query
         .mockResolvedValueOnce({ rows: mockUsers }); // Get users
       pool.query
@@ -147,7 +179,7 @@ describe('User API Endpoints', () => {
         .expect(200);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(2);
+      expect(response.body.data.users).toHaveLength(2);
     });
 
     it('should return 401 for invalid token', async () => {
@@ -163,13 +195,15 @@ describe('User API Endpoints', () => {
   describe('GET /api/users/tenants/:tenantId', () => {
     it('should return users for specific tenant', async () => {
       const mockUsers = [
-        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user' }
+        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user', is_active: true, created_at: new Date() }
       ];
       
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
       // Mock listUsersInTenant queries
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }); // Check user permissions
       pool.query
         .mockResolvedValueOnce({ rows: mockUsers }); // Get users
       pool.query
@@ -181,18 +215,20 @@ describe('User API Endpoints', () => {
         .expect(200);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data.users).toHaveLength(1);
     });
 
     it('should allow super admin to access users from any tenant', async () => {
       const mockUsers = [
-        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user' }
+        { id: 'user1', email: 'user1@test.com', full_name: 'User One', role: 'user', is_active: true, created_at: new Date() }
       ];
       
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', email: 'superadmin@test.com', full_name: 'Super Admin', role: 'super_admin', tenant_id: null, is_active: true }] }) // Authenticate user
       // Mock listUsersInTenant queries for super_admin
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'super-admin-id', role: 'super_admin', tenant_id: null }] }); // Check super admin permissions
       pool.query
         .mockResolvedValueOnce({ rows: mockUsers }); // Get users
       pool.query
@@ -204,14 +240,16 @@ describe('User API Endpoints', () => {
         .expect(200);
       
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data.users).toHaveLength(1);
     });
 
     it('should return 403 for unauthorized access to different tenant', async () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'user-id', role: 'user', tenant_id: 'other-tenant-id' }] }); // User from different tenant
+      // Mock listUsersInTenant queries - check permissions
+      pool.query
+        .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', role: 'user', tenant_id: 'tenant-id' }] }); // Check user permissions
       
       const response = await request(app)
         .get('/api/users/tenants/different-tenant-id')
@@ -234,7 +272,7 @@ describe('User API Endpoints', () => {
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
       // Mock updateUser queries
       pool.query
-        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-id' }] }); // Get user to check tenant
+        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-id' }] }); // Get user to check tenant (user updating own account)
       pool.query
         .mockResolvedValueOnce({ rows: [] }); // Update user result
       // Mock audit log insertion
@@ -284,13 +322,13 @@ describe('User API Endpoints', () => {
       
       // Mock authenticate middleware query
       pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'user1-id', email: 'user1@test.com', full_name: 'User One', role: 'user', tenant_id: 'tenant1-id', is_active: true }] }) // Authenticate user
+        .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
       // Mock updateUser queries
       pool.query
-        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant2-id' }] }); // Get user to check tenant (different tenant)
+        .mockResolvedValueOnce({ rows: [{ tenant_id: 'different-tenant-id' }] }); // Get user to check tenant (different tenant)
       
       const response = await request(app)
-        .put('/api/users/user2-id')
+        .put('/api/users/user-from-different-tenant-id')
         .set('Authorization', `Bearer ${regularUserToken}`)
         .send(updateData)
         .expect(403);
@@ -328,9 +366,6 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'regular-user-id', email: 'user@test.com', full_name: 'Regular User', role: 'user', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-      // Mock deleteUser queries
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-id' }] }); // Get user to delete
       
       const response = await request(app)
         .delete('/api/users/other-user')
@@ -344,8 +379,6 @@ describe('User API Endpoints', () => {
       // Mock authenticate middleware query
       pool.query
         .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', email: 'admin@test.com', full_name: 'Test Admin', role: 'tenant_admin', tenant_id: 'tenant-id', is_active: true }] }) // Authenticate user
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }) // Check user role
-        .mockResolvedValueOnce({ rows: [{ id: 'admin-user-id', role: 'tenant_admin', tenant_id: 'tenant-id' }] }); // Get user to delete (same as requester)
       
       const response = await request(app)
         .delete('/api/users/admin-user-id')
@@ -354,5 +387,6 @@ describe('User API Endpoints', () => {
       
       expect(response.body.success).toBe(false);
     });
+
   });
 });

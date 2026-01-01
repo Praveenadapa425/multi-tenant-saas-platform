@@ -195,11 +195,17 @@ describe('Project API Endpoints', () => {
         if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
           // Authentication query
           return Promise.resolve({ rows: [mockRegularUser] });
-        } else if (query && query.includes('SELECT p.*, (SELECT COUNT(*) FROM tasks WHERE project_id = p.id AND tenant_id')) {
-          // Main projects query
+        } else if (query && query.includes('SELECT p.*, (SELECT COUNT(*) FROM tasks WHERE project_id = p.id') && query.includes('ORDER BY p.created_at DESC')) {
+          // Main projects query - match the exact pattern from project controller
           return Promise.resolve({ rows: mockProjects });
-        } else if (query && query.includes('SELECT COUNT(*) as count FROM projects WHERE tenant_id')) {
+        } else if (query && query.includes('SELECT p.*,') && query.includes('FROM projects p') && query.includes('ORDER BY p.created_at DESC')) {
+          // Alternative query pattern for super admin access
+          return Promise.resolve({ rows: mockProjects });
+        } else if (query && query.includes('SELECT COUNT(*) as count FROM projects')) {
           // Count query for pagination
+          return Promise.resolve({ rows: [{ count: '2' }] });
+        } else if (query && query.includes('SELECT COUNT(*) as count FROM projects WHERE')) {
+          // Count query with WHERE clause for tenant-specific access
           return Promise.resolve({ rows: [{ count: '2' }] });
         }
         return Promise.resolve({ rows: [] });
@@ -233,6 +239,9 @@ describe('Project API Endpoints', () => {
           return Promise.resolve({ rows: [mockRegularUser] });
         } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
           return Promise.resolve({ rows: [mockProject] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1')) {
+          // Also handle super admin query pattern
+          return Promise.resolve({ rows: [mockProject] });
         } else if (query && query.includes('SELECT COUNT(*) as total_tasks')) {
           return Promise.resolve({ rows: [{ total_tasks: 0, todo_count: 0, in_progress_count: 0, completed_count: 0 }] });
         }
@@ -255,8 +264,10 @@ describe('Project API Endpoints', () => {
         if (query && query.includes('SELECT id, email, full_name, role, tenant_id, is_active FROM users WHERE id')) {
           return Promise.resolve({ rows: [mockSuperAdmin] });
         } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
-          // For super admin, the tenant isolation might be handled differently
-          // or the project might be found based on different logic
+          // For regular users, check tenant_id
+          return Promise.resolve({ rows: [mockProject] });
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1')) {
+          // For super admin access (without tenant_id restriction)
           return Promise.resolve({ rows: [mockProject] });
         } else if (query && query.includes('SELECT COUNT(*) as total_tasks')) {
           return Promise.resolve({ rows: [{ total_tasks: 0, todo_count: 0, in_progress_count: 0, completed_count: 0 }] });
@@ -328,6 +339,9 @@ describe('Project API Endpoints', () => {
           return Promise.resolve({ rows: [mockTenantAdmin] });
         } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
           return Promise.resolve({ rows: [mockProject] }); // Project exists and belongs to tenant
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1')) {
+          // Also handle super admin query pattern
+          return Promise.resolve({ rows: [mockProject] });
         } else if (query && query.includes('UPDATE projects SET')) {
           return Promise.resolve({ rows: [mockProject] });
         } else if (query && query.includes('INSERT INTO audit_logs')) {
@@ -382,6 +396,9 @@ describe('Project API Endpoints', () => {
           return Promise.resolve({ rows: [mockRegularUser] });
         } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
           return Promise.resolve({ rows: [mockProject] }); // Project exists
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1')) {
+          // Also handle super admin query pattern
+          return Promise.resolve({ rows: [mockProject] });
         }
         return Promise.resolve({ rows: [] });
       });
@@ -405,6 +422,9 @@ describe('Project API Endpoints', () => {
           return Promise.resolve({ rows: [mockTenantAdmin] });
         } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
           return Promise.resolve({ rows: [mockProject] }); // Project exists and belongs to tenant
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1')) {
+          // Also handle super admin query pattern
+          return Promise.resolve({ rows: [mockProject] });
         } else if (query && query.includes('DELETE FROM projects WHERE id = $1')) {
           return Promise.resolve({ rows: [] });
         } else if (query && query.includes('INSERT INTO audit_logs')) {
@@ -450,6 +470,9 @@ describe('Project API Endpoints', () => {
           return Promise.resolve({ rows: [mockRegularUser] });
         } else if (query && query.includes('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2')) {
           return Promise.resolve({ rows: [mockProject] }); // Project exists
+        } else if (query && query.includes('SELECT * FROM projects WHERE id = $1')) {
+          // Also handle super admin query pattern
+          return Promise.resolve({ rows: [mockProject] });
         }
         return Promise.resolve({ rows: [] });
       });

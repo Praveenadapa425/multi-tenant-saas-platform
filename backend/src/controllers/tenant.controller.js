@@ -126,7 +126,7 @@ exports.getTenant = async (req, res) => {
       `;
     
     const statsResult = await pool.query(statsQuery, [tenantId]);
-    const stats = statsResult.rows[0];
+    const stats = statsResult.rows[0] || {};
 
     logger.info('Tenant retrieved', { tenantId, userId });
 
@@ -135,9 +135,9 @@ exports.getTenant = async (req, res) => {
       data: {
         ...sanitizeObject(tenant),
         stats: {
-          totalUsers: stats.total_users,
-          totalProjects: stats.total_projects,
-          totalTasks: stats.total_tasks
+          totalUsers: stats.total_users || 0,
+          totalProjects: stats.total_projects || 0,
+          totalTasks: stats.total_tasks || 0
         }
       }
     });

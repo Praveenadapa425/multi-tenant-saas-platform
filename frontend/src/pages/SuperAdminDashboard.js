@@ -9,9 +9,10 @@ const SuperAdminDashboard = () => {
   const [tenants, setTenants] = useState([]);
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('stats'); // 'stats', 'tenants', 'users', 'projects'
+  const [activeTab, setActiveTab] = useState('stats'); // 'stats', 'tenants', 'users', 'projects', 'tasks'
   const [error, setError] = useState('');
   const [deletingTenantId, setDeletingTenantId] = useState(null);
 
@@ -19,17 +20,19 @@ const SuperAdminDashboard = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [statsRes, tenantsRes, usersRes, projectsRes] = await Promise.all([
+        const [statsRes, tenantsRes, usersRes, projectsRes, tasksRes] = await Promise.all([
           superadminService.getSystemStats(),
           superadminService.getAllTenants({ limit: 10 }),
           superadminService.getAllUsers({ limit: 10 }),
-          projectService.getProjects() // Get all projects for super admin
+          superadminService.getAllProjects({ limit: 10 }),
+          superadminService.getAllTasks({ limit: 10 })
         ]);
         
         if (statsRes.success) setStats(statsRes.data);
         if (tenantsRes.success) setTenants(tenantsRes.data);
         if (usersRes.success) setUsers(usersRes.data);
-        if (projectsRes.data?.success) setProjects(projectsRes.data.data || []);
+        if (projectsRes.success) setProjects(projectsRes.data || []);
+        if (tasksRes.success) setTasks(tasksRes.data || []);
       } catch (err) {
         setError('Failed to load dashboard data');
         console.error(err);
@@ -121,6 +124,12 @@ const SuperAdminDashboard = () => {
           onClick={() => setActiveTab('projects')}
         >
           All Projects
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'tasks' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tasks')}
+        >
+          All Tasks
         </button>
       </div>
 
@@ -252,7 +261,10 @@ const SuperAdminDashboard = () => {
                         <p>Status: <span className={`status status-${project.status}`}>
                           {project.status}
                         </span></p>
-                        <p>Tenant ID: {project.tenant_id}</p>
+                        <p>Tenant: {project.tenant_name} ({project.tenant_subdomain})</p>
+                        {project.created_by_name && (
+                          <p>Created by: {project.created_by_name}</p>
+                        )}
                       </div>
                       <div className="item-meta">
                         <p>Created: {new Date(project.created_at).toLocaleDateString()}</p>
@@ -262,6 +274,45 @@ const SuperAdminDashboard = () => {
                 </div>
               ) : (
                 <p className="empty-state">No projects found in the system.</p>
+              )}
+            </section>
+          )}
+
+          {/* All Tasks Tab */}
+          {activeTab === 'tasks' && (
+            <section className="recent-section">
+              <div className="section-header">
+                <h2>All Tasks</h2>
+                <span className="count">{tasks.length} tasks</span>
+              </div>
+              
+              {tasks.length > 0 ? (
+                <div className="recent-list">
+                  {tasks.map(task => (
+                    <div key={task.id} className="recent-item">
+                      <div className="item-content">
+                        <h3>{task.title}</h3>
+                        <p>{task.description}</p>
+                        <p>Status: <span className={`status status-${task.status}`}>
+                          {task.status}
+                        </span></p>
+                        <p>Priority: <span className={`priority priority-${task.priority}`}>
+                          {task.priority}
+                        </span></p>
+                        <p>Project: {task.project_name}</p>
+                        <p>Tenant: {task.tenant_name} ({task.tenant_subdomain})</p>
+                        {task.assigned_to_name && (
+                          <p>Assigned to: {task.assigned_to_name}</p>
+                        )}
+                      </div>
+                      <div className="item-meta">
+                        <p>Created: {new Date(task.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-state">No tasks found in the system.</p>
               )}
             </section>
           )}

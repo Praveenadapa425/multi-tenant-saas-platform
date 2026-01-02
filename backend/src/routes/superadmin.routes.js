@@ -19,4 +19,12 @@ router.put('/tenants/:tenantId/status', authenticate, authorize('super_admin'), 
 // GET /api/superadmin/users
 router.get('/users', authenticate, authorize('super_admin'), superAdminController.getAllUsers);
 
+// All Projects Management
+// GET /api/superadmin/projects
+router.get('/projects', authenticate, authorize('super_admin'), superAdminController.getAllProjects);
+
+// All Tasks Management
+// GET /api/superadmin/tasks
+router.get('/tasks', authenticate, authorize('super_admin'), superAdminController.getAllTasks);
+
 module.exports = router;

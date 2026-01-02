@@ -49,6 +49,26 @@ const superadminService = {
       console.error('Error deleting tenant:', error);
       throw error;
     }
+  },
+
+  getAllProjects: async (params = {}) => {
+    try {
+      const response = await api.get('/superadmin/projects', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting all projects:', error);
+      throw error;
+    }
+  },
+
+  getAllTasks: async (params = {}) => {
+    try {
+      const response = await api.get('/superadmin/tasks', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting all tasks:', error);
+      throw error;
+    }
   }
 };
 

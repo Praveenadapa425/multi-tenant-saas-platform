@@ -312,9 +312,171 @@ async function updateTenantStatus(req, res) {
   }
 }
 
+/**
+ * Get all projects across all tenants (Super Admin only)
+ * GET /api/superadmin/projects
+ */
+async function getAllProjects(req, res) {
+  try {
+    // Only super admins can access this
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Super admin privileges required.'
+      });
+    }
+
+    const { page = 1, limit = 20, search } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    let query = `SELECT p.id, p.name, p.description, p.status, p.created_at, p.updated_at, 
+                t.name as tenant_name, t.subdomain as tenant_subdomain,
+                u.full_name as created_by_name
+                FROM projects p 
+                JOIN tenants t ON p.tenant_id = t.id
+                LEFT JOIN users u ON p.created_by = u.id`;
+    
+    let countQuery = 'SELECT COUNT(*) as count FROM projects p JOIN tenants t ON p.tenant_id = t.id LEFT JOIN users u ON p.created_by = u.id';
+    
+    const params = [];
+    let countParams = [];
+    
+    if (search) {
+      query += ` WHERE p.name ILIKE $${params.length + 1} OR p.description ILIKE $${params.length + 1} 
+                OR t.name ILIKE $${params.length + 1} OR t.subdomain ILIKE $${params.length + 1}`;
+      countQuery += ` WHERE p.name ILIKE $${countParams.length + 1} OR p.description ILIKE $${countParams.length + 1} 
+                OR t.name ILIKE $${countParams.length + 1} OR t.subdomain ILIKE $${countParams.length + 1}`;
+      params.push(`%${search}%`);
+      countParams.push(`%${search}%`);
+    }
+    
+    query += ' ORDER BY p.created_at DESC';
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+    
+    const [projectsResult, countResult] = await Promise.all([
+      pool.query(query, params),
+      pool.query(countQuery, countParams)
+    ]);
+    
+    const totalCount = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+    // Log action
+    await logAction({
+      tenantId: null,
+      userId: req.user.id,
+      action: 'GET_ALL_PROJECTS',
+      entityType: 'project',
+      entityId: null,
+      ipAddress: req.ip
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: projectsResult.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalCount,
+        pages: totalPages
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting all projects', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get projects'
+    });
+  }
+}
+
+/**
+ * Get all tasks across all tenants (Super Admin only)
+ * GET /api/superadmin/tasks
+ */
+async function getAllTasks(req, res) {
+  try {
+    // Only super admins can access this
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Super admin privileges required.'
+      });
+    }
+
+    const { page = 1, limit = 20, search } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    let query = `SELECT t.id, t.title, t.description, t.status, t.priority, t.created_at, t.updated_at, 
+                p.name as project_name, 
+                tenant.name as tenant_name, tenant.subdomain as tenant_subdomain,
+                u.full_name as assigned_to_name
+                FROM tasks t
+                JOIN projects p ON t.project_id = p.id
+                JOIN tenants tenant ON t.tenant_id = tenant.id
+                LEFT JOIN users u ON t.assigned_to = u.id`;
+    
+    let countQuery = 'SELECT COUNT(*) as count FROM tasks t JOIN projects p ON t.project_id = p.id JOIN tenants tenant ON t.tenant_id = tenant.id LEFT JOIN users u ON t.assigned_to = u.id';
+    
+    const params = [];
+    let countParams = [];
+    
+    if (search) {
+      query += ` WHERE t.title ILIKE $${params.length + 1} OR t.description ILIKE $${params.length + 1} 
+                OR p.name ILIKE $${params.length + 1} OR tenant.name ILIKE $${params.length + 1}`;
+      countQuery += ` WHERE t.title ILIKE $${countParams.length + 1} OR t.description ILIKE $${countParams.length + 1} 
+                OR p.name ILIKE $${countParams.length + 1} OR tenant.name ILIKE $${countParams.length + 1}`;
+      params.push(`%${search}%`);
+      countParams.push(`%${search}%`);
+    }
+    
+    query += ' ORDER BY t.created_at DESC';
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+    
+    const [tasksResult, countResult] = await Promise.all([
+      pool.query(query, params),
+      pool.query(countQuery, countParams)
+    ]);
+    
+    const totalCount = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+    // Log action
+    await logAction({
+      tenantId: null,
+      userId: req.user.id,
+      action: 'GET_ALL_TASKS',
+      entityType: 'task',
+      entityId: null,
+      ipAddress: req.ip
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: tasksResult.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalCount,
+        pages: totalPages
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting all tasks', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get tasks'
+    });
+  }
+}
+
 module.exports = {
   getSystemStats,
   getAllTenants,
   getAllUsers,
+  getAllProjects,
+  getAllTasks,
   updateTenantStatus
 };

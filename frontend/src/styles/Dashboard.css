@@ -212,6 +212,34 @@
   color: #00b894;
 }
 
+.priority {
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.priority-low {
+  background: #55efc4;
+  color: #00b894;
+}
+
+.priority-medium {
+  background: #ffeaa7;
+  color: #e17055;
+}
+
+.priority-high {
+  background: #fab1a0;
+  color: #d63031;
+}
+
+.priority-critical {
+  background: #d63031;
+  color: white;
+}
+
 .role {
   padding: 0.35rem 0.75rem;
   border-radius: 20px;

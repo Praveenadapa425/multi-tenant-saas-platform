@@ -19,11 +19,17 @@ async function createTask(req, res) {
       });
     }
 
-    // Check if project exists and belongs to user's tenant
-    const projectResult = await pool.query(
-      'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
-      [projectId, req.user.tenantId]
-    );
+    // Check if project exists
+    // Super admins can access projects from any tenant, others only from their tenant
+    let projectQuery = 'SELECT * FROM projects WHERE id = $1';
+    let projectParams = [projectId];
+    
+    if (req.user.role !== 'super_admin') {
+      projectQuery += ' AND tenant_id = $2';
+      projectParams.push(req.user.tenantId);
+    }
+    
+    const projectResult = await pool.query(projectQuery, projectParams);
 
     if (projectResult.rows.length === 0) {
       return res.status(404).json({
@@ -34,9 +40,12 @@ async function createTask(req, res) {
 
     // If assignedTo is provided, verify the user exists in the same tenant
     if (assignedTo) {
+      // For super admins, use the project's actual tenant_id, otherwise use user's tenant_id
+      const assignedTenantId = req.user.role === 'super_admin' ? projectResult.rows[0].tenant_id : req.user.tenantId;
+      
       const assignedUserResult = await pool.query(
         'SELECT id FROM users WHERE id = $1 AND tenant_id = $2',
-        [assignedTo, req.user.tenantId]
+        [assignedTo, assignedTenantId]
       );
 
       if (assignedUserResult.rows.length === 0) {
@@ -48,17 +57,20 @@ async function createTask(req, res) {
     }
 
     // Create task
+    // For super admins, use the project's actual tenant_id, otherwise use user's tenant_id
+    const taskTenantId = req.user.role === 'super_admin' ? projectResult.rows[0].tenant_id : req.user.tenantId;
+    
     const result = await pool.query(
       `INSERT INTO tasks (project_id, tenant_id, title, description, status, priority, assigned_to, due_date)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [projectId, req.user.tenantId, title.trim(), description ? description.trim() : null, 'todo', priority || 'medium', assignedTo || null, dueDate || null]
+      [projectId, taskTenantId, title.trim(), description ? description.trim() : null, 'todo', priority || 'medium', assignedTo || null, dueDate || null]
     );
 
     const newTask = result.rows[0];
 
     // Log action
     await logAction({
-      tenantId: req.user.tenantId,
+      tenantId: taskTenantId,
       userId: req.user.id,
       action: 'CREATE_TASK',
       entityType: 'task',
@@ -90,11 +102,17 @@ async function listTasks(req, res) {
   const offset = (parseInt(page) - 1) * parseInt(limit);
 
   try {
-    // Check if project exists and belongs to user's tenant
-    const projectResult = await pool.query(
-      'SELECT * FROM projects WHERE id = $1 AND tenant_id = $2',
-      [projectId, req.user.tenantId]
-    );
+    // Check if project exists
+    // Super admins can access projects from any tenant, others only from their tenant
+    let projectQuery = 'SELECT * FROM projects WHERE id = $1';
+    let projectParams = [projectId];
+    
+    if (req.user.role !== 'super_admin') {
+      projectQuery += ' AND tenant_id = $2';
+      projectParams.push(req.user.tenantId);
+    }
+    
+    const projectResult = await pool.query(projectQuery, projectParams);
 
     if (projectResult.rows.length === 0) {
       return res.status(404).json({
@@ -103,10 +121,17 @@ async function listTasks(req, res) {
       });
     }
 
-    let query = 'SELECT * FROM tasks WHERE project_id = $1 AND tenant_id = $2';
-    let countQuery = 'SELECT COUNT(*) as count FROM tasks WHERE project_id = $1 AND tenant_id = $2';
-    const params = [projectId, req.user.tenantId];
-    const countParams = [projectId, req.user.tenantId];
+    let query = 'SELECT * FROM tasks WHERE project_id = $1';
+    let countQuery = 'SELECT COUNT(*) as count FROM tasks WHERE project_id = $1';
+    const params = [projectId];
+    const countParams = [projectId];
+    
+    if (req.user.role !== 'super_admin') {
+      query += ' AND tenant_id = $2';
+      countQuery += ' AND tenant_id = $2';
+      params.push(req.user.tenantId);
+      countParams.push(req.user.tenantId);
+    }
 
     if (status) {
       query += ' AND status = $' + (params.length + 1);
@@ -184,11 +209,17 @@ async function updateTaskStatus(req, res) {
       });
     }
 
-    // Check if task exists and belongs to user's tenant
-    const taskResult = await pool.query(
-      'SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2',
-      [taskId, req.user.tenantId]
-    );
+    // Check if task exists
+    // Super admins can access tasks from any tenant, others only from their tenant
+    let taskQuery = 'SELECT * FROM tasks WHERE id = $1';
+    let taskParams = [taskId];
+    
+    if (req.user.role !== 'super_admin') {
+      taskQuery += ' AND tenant_id = $2';
+      taskParams.push(req.user.tenantId);
+    }
+    
+    const taskResult = await pool.query(taskQuery, taskParams);
 
     if (taskResult.rows.length === 0) {
       return res.status(404).json({
@@ -207,7 +238,7 @@ async function updateTaskStatus(req, res) {
 
     // Log action
     await logAction({
-      tenantId: req.user.tenantId,
+      tenantId: taskResult.rows[0].tenant_id, // Use the task's actual tenant_id
       userId: req.user.id,
       action: 'UPDATE_TASK_STATUS',
       entityType: 'task',
@@ -238,11 +269,17 @@ async function updateTask(req, res) {
   const { title, description, status, priority, assignedTo, dueDate } = req.body;
 
   try {
-    // Check if task exists and belongs to user's tenant
-    const taskResult = await pool.query(
-      'SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2',
-      [taskId, req.user.tenantId]
-    );
+    // Check if task exists
+    // Super admins can access tasks from any tenant, others only from their tenant
+    let taskQuery = 'SELECT * FROM tasks WHERE id = $1';
+    let taskParams = [taskId];
+    
+    if (req.user.role !== 'super_admin') {
+      taskQuery += ' AND tenant_id = $2';
+      taskParams.push(req.user.tenantId);
+    }
+    
+    const taskResult = await pool.query(taskQuery, taskParams);
 
     if (taskResult.rows.length === 0) {
       return res.status(404).json({
@@ -253,9 +290,12 @@ async function updateTask(req, res) {
 
     // If assignedTo is being updated, verify the user exists in the same tenant
     if (assignedTo && assignedTo !== null) {
+      // For super admins, use the task's actual tenant_id, otherwise use user's tenant_id
+      const checkTenantId = req.user.role === 'super_admin' ? taskResult.rows[0].tenant_id : req.user.tenantId;
+      
       const assignedUserResult = await pool.query(
         'SELECT id FROM users WHERE id = $1 AND tenant_id = $2',
-        [assignedTo, req.user.tenantId]
+        [assignedTo, checkTenantId]
       );
 
       if (assignedUserResult.rows.length === 0) {
@@ -323,7 +363,10 @@ async function updateTask(req, res) {
 
     updates.push(`updated_at = NOW()`);
     params.push(taskId);
-    params.push(req.user.tenantId);
+    
+    // For super admins, use the task's actual tenant_id, otherwise use user's tenant_id
+    const updateTenantId = req.user.role === 'super_admin' ? taskResult.rows[0].tenant_id : req.user.tenantId;
+    params.push(updateTenantId);
 
     const query = `UPDATE tasks SET ${updates.join(', ')} WHERE id = $${paramCount} AND tenant_id = $${paramCount + 1} RETURNING *`;
     const result = await pool.query(query, params);
@@ -332,7 +375,7 @@ async function updateTask(req, res) {
 
     // Log action
     await logAction({
-      tenantId: req.user.tenantId,
+      tenantId: updateTenantId,
       userId: req.user.id,
       action: 'UPDATE_TASK',
       entityType: 'task',
@@ -362,11 +405,17 @@ async function deleteTask(req, res) {
   const { taskId } = req.params;
 
   try {
-    // Check if task exists and belongs to user's tenant
-    const taskResult = await pool.query(
-      'SELECT * FROM tasks WHERE id = $1 AND tenant_id = $2',
-      [taskId, req.user.tenantId]
-    );
+    // Check if task exists
+    // Super admins can access tasks from any tenant, others only from their tenant
+    let taskQuery = 'SELECT * FROM tasks WHERE id = $1';
+    let taskParams = [taskId];
+    
+    if (req.user.role !== 'super_admin') {
+      taskQuery += ' AND tenant_id = $2';
+      taskParams.push(req.user.tenantId);
+    }
+    
+    const taskResult = await pool.query(taskQuery, taskParams);
 
     if (taskResult.rows.length === 0) {
       return res.status(404).json({
@@ -405,7 +454,7 @@ async function deleteTask(req, res) {
         
         // Log action
         await logAction({
-          tenantId: req.user.tenantId,
+          tenantId: taskResult.rows[0].tenant_id, // Use the task's actual tenant_id
           userId: req.user.id,
           action: 'DELETE_TASK',
           entityType: 'task',
@@ -431,7 +480,7 @@ async function deleteTask(req, res) {
       
       // Log action
       await logAction({
-        tenantId: req.user.tenantId,
+        tenantId: taskResult.rows[0].tenant_id, // Use the task's actual tenant_id
         userId: req.user.id,
         action: 'DELETE_TASK',
         entityType: 'task',

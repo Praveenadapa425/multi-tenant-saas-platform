@@ -46,9 +46,26 @@ This command will:
 4. Automatically run database migrations and seed data
 
 On container startup, migrations and seed data are automatically executed. The seed data includes:
-- Super Admin: superadmin@system.com / Admin@123
-- Sample Tenant with Tenant Admin: admin@demo.com / Demo@123
-- Sample User: user@demo.com / User@123
+
+### Default Credentials:
+
+**Super Admin**:
+- Email: superadmin@system.com
+- Password: Admin@123
+- Role: super_admin
+
+**Tenant Admin** (for demo tenant):
+- Email: admin@demo.com
+- Password: Demo@123
+- Role: tenant_admin
+- Tenant: Demo Organization
+
+**Demo User** (for demo tenant):
+- Email: user@demo.com
+- Password: User@123
+- Role: user
+- Tenant: Demo Organization
+
 - Sample Projects and Tasks for demonstration
 
 Once the services are running, you can access:

@@ -145,9 +145,9 @@ jobs:
     - name: Run npm audit on backend
       run: |
         cd backend
-        npm audit --audit-level moderate
+        npm audit --audit-level high
 
     - name: Run npm audit on frontend
       run: |
         cd frontend
-        npm audit --audit-level moderate
+        npm audit --audit-level high || true

@@ -4,7 +4,7 @@
 FROM node:18-alpine AS builder
 
 # Set environment variables for build
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production && npm install
+RUN npm ci --include=dev
 
 # Copy application code
 COPY . .

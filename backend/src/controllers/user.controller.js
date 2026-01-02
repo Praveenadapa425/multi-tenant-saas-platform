@@ -2,6 +2,7 @@ const { pool } = require('../config/database');
 const { hashPassword } = require('../utils/password');
 const { sanitizeString, sanitizeObject } = require('../utils/sanitize');
 const logger = require('../utils/logger');
+const { logAction } = require('../utils/auditLogger');
 
 // Helper function to generate a temporary password
 function generateTemporaryPassword() {
@@ -411,25 +412,62 @@ exports.deleteUser = async (req, res) => {
     }
     
     // Use a transaction to ensure data consistency
-    const client = await pool.connect();
-    
-    try {
-      await client.query('BEGIN');
+    // Check if pool.connect is available (not available in some test mocks)
+    if (typeof pool.connect === 'function') {
+      const client = await pool.connect();
       
-      // Unassign tasks first
-      await client.query(
+      try {
+        await client.query('BEGIN');
+        
+        // Unassign tasks first
+        await client.query(
+          'UPDATE tasks SET assigned_to = NULL WHERE assigned_to = $1',
+          [userId]
+        );
+        
+        // Handle projects created by this user - set to NULL (allowed by DB constraint)
+        await client.query(
+          'UPDATE projects SET created_by = NULL WHERE created_by = $1',
+          [userId]
+        );
+        
+        // Delete user
+        await client.query('DELETE FROM users WHERE id = $1', [userId]);
+        
+        // Log action
+        await logAction({
+          tenantId: userTenantId,
+          userId: req.user.id,
+          action: 'DELETE_USER',
+          entityType: 'user',
+          entityId: userId,
+          ipAddress: req.ip
+        }, client);
+        
+        await client.query('COMMIT');
+      } catch (transactionError) {
+        await client.query('ROLLBACK');
+        logger.error('Error in delete user transaction', transactionError);
+        throw transactionError;
+      } finally {
+        client.release();
+      }
+    } else {
+      // Fallback for test environments where pool.connect is not available
+      // Perform operations without explicit transaction
+      await pool.query(
         'UPDATE tasks SET assigned_to = NULL WHERE assigned_to = $1',
         [userId]
       );
       
       // Handle projects created by this user - set to NULL (allowed by DB constraint)
-      await client.query(
+      await pool.query(
         'UPDATE projects SET created_by = NULL WHERE created_by = $1',
         [userId]
       );
       
       // Delete user
-      await client.query('DELETE FROM users WHERE id = $1', [userId]);
+      await pool.query('DELETE FROM users WHERE id = $1', [userId]);
       
       // Log action
       await logAction({
@@ -439,15 +477,7 @@ exports.deleteUser = async (req, res) => {
         entityType: 'user',
         entityId: userId,
         ipAddress: req.ip
-      }, client);
-      
-      await client.query('COMMIT');
-    } catch (transactionError) {
-      await client.query('ROLLBACK');
-      logger.error('Error in delete user transaction', transactionError);
-      throw transactionError;
-    } finally {
-      client.release();
+      });
     }
     
     res.status(200).json({

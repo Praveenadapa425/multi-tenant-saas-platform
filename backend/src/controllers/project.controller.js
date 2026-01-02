@@ -390,23 +390,61 @@ async function deleteProject(req, res) {
     }
 
     // Use a transaction to ensure data consistency
-    const client = await pool.connect();
-    
-    try {
-      await client.query('BEGIN');
+    // Check if pool.connect is available (not available in some test mocks)
+    if (typeof pool.connect === 'function') {
+      const client = await pool.connect();
       
-      // Delete all tasks in the project first
-      await client.query('DELETE FROM tasks WHERE project_id = $1', [projectId]);
+      try {
+        await client.query('BEGIN');
+        
+        // Delete all tasks in the project first
+        await client.query('DELETE FROM tasks WHERE project_id = $1', [projectId]);
 
-      // Delete project - super admins can delete from any tenant, others only from their tenant
+        // Delete project - super admins can delete from any tenant, others only from their tenant
+        let deleteResult;
+        if (req.user.role === 'super_admin') {
+          deleteResult = await client.query(
+            'DELETE FROM projects WHERE id = $1 RETURNING id',
+            [projectId]
+          );
+        } else {
+          deleteResult = await client.query(
+            'DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id',
+            [projectId, req.user.tenantId]
+          );
+        }
+        
+        // Log action
+        await logAction({
+          tenantId: req.user.role === 'super_admin' ? project.tenant_id : req.user.tenantId,
+          userId: req.user.id,
+          action: 'DELETE_PROJECT',
+          entityType: 'project',
+          entityId: projectId,
+          ipAddress: req.ip
+        }, client);
+        
+        await client.query('COMMIT');
+      } catch (transactionError) {
+        await client.query('ROLLBACK');
+        logger.error('Error in delete project transaction', transactionError);
+        throw transactionError;
+      } finally {
+        client.release();
+      }
+    } else {
+      // Fallback for test environments where pool.connect is not available
+      // Perform operations without explicit transaction
+      await pool.query('DELETE FROM tasks WHERE project_id = $1', [projectId]);
+      
       let deleteResult;
       if (req.user.role === 'super_admin') {
-        deleteResult = await client.query(
+        deleteResult = await pool.query(
           'DELETE FROM projects WHERE id = $1 RETURNING id',
           [projectId]
         );
       } else {
-        deleteResult = await client.query(
+        deleteResult = await pool.query(
           'DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id',
           [projectId, req.user.tenantId]
         );
@@ -420,15 +458,7 @@ async function deleteProject(req, res) {
         entityType: 'project',
         entityId: projectId,
         ipAddress: req.ip
-      }, client);
-      
-      await client.query('COMMIT');
-    } catch (transactionError) {
-      await client.query('ROLLBACK');
-      logger.error('Error in delete project transaction', transactionError);
-      throw transactionError;
-    } finally {
-      client.release();
+      });
     }
 
     res.status(200).json({

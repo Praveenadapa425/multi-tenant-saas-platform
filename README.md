@@ -325,4 +325,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Demo Video
 
-[Link to YouTube demo video will be added here]
+[Link to Demo Video](https://vimeo.com/1149505171/8c75614604?fl=ip&fe=ec)

@@ -7,7 +7,7 @@ VALUES (
   '00000000-0000-0000-0000-000000000001',
   NULL,
   'superadmin@system.com',
-  '$2b$10$nPqZvTj8GJDxQfKfXWs3ne8XWlfjVPY/3VFpZgF5T8vZiLcJpJPBe', -- Admin@123
+  '$2a$10$9UdQx8vZJYmNjX9IjMi7jeFK2SFJ4RraW9m4aM34RhAdHfV77UA2m', -- Admin@123
   'Super Administrator',
   'super_admin',
   true
@@ -31,7 +31,7 @@ VALUES (
   '20000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
   'admin@demo.com',
-  '$2b$10$eImiTXuWVxfaHNAVIqlFQOYP32lSB8qwVs8I4VWUgIY8yJPYMmoEa', -- Demo@123
+  '$2a$10$SUzbY3cicIWSqf1U18NH.ekCDMMDlZk4sZcJ9vbPLfNTZZFmO9fba', -- Demo@123
   'Admin User',
   'tenant_admin',
   true
@@ -44,7 +44,7 @@ VALUES
     '30000000-0000-0000-0000-000000000001',
     '10000000-0000-0000-0000-000000000001',
     'user1@demo.com',
-    '$2b$10$j0NfhYqzYqhxJy6q5AEkxOOEVH7vVJqGN1PIxrClGZGRx1fLvn9Iu', -- User@123
+    '$2a$10$CYq2eGFRZY9dQhRU6NyJveYyHhxIoCRdvpWXcZnlitfxg1vlJzevS', -- User@123
     'User One',
     'user',
     true
@@ -53,7 +53,7 @@ VALUES
     '40000000-0000-0000-0000-000000000001',
     '10000000-0000-0000-0000-000000000001',
     'user2@demo.com',
-    '$2b$10$j0NfhYqzYqhxJy6q5AEkxOOEVH7vVJqGN1PIxrClGZGRx1fLvn9Iu', -- User@123
+    '$2a$10$CYq2eGFRZY9dQhRU6NyJveYyHhxIoCRdvpWXcZnlitfxg1vlJzevS', -- User@123
     'User Two',
     'user',
     true

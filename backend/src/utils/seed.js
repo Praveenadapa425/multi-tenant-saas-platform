@@ -130,27 +130,29 @@ async function seedDatabase() {
         const project2Id = uuidv4();
         
         await pool.query(`
-          INSERT INTO projects (id, tenant_id, user_id, name, description) 
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO projects (id, tenant_id, name, description, status, created_by) 
+          VALUES ($1, $2, $3, $4, $5, $6)
         `, [
           project1Id,
           demoTenantId,
-          tenantAdminId,
           'Website Redesign',
-          'Redesign the company website with modern UI/UX'
+          'Redesign the company website with modern UI/UX',
+          'active',
+          tenantAdminId
         ]);
 
         await pool.query(`
-          INSERT INTO projects (id, tenant_id, user_id, name, description) 
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO projects (id, tenant_id, name, description, status, created_by) 
+          VALUES ($1, $2, $3, $4, $5, $6)
         `, [
           project2Id,
           demoTenantId,
-          tenantAdminId,
           'Mobile App Development',
-          'Develop a mobile application for customer engagement'
+          'Develop a mobile application for customer engagement',
+          'active',
+          tenantAdminId
         ]);
-
+        
         console.log('Sample projects created successfully');
       }
 
@@ -207,45 +209,45 @@ async function seedDatabase() {
           const task3Id = uuidv4();
           
           await pool.query(`
-            INSERT INTO tasks (id, tenant_id, project_id, assigned_user_id, title, description, status, priority) 
+            INSERT INTO tasks (id, project_id, tenant_id, title, description, status, priority, assigned_to) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
             task1Id,
-            demoTenantId,
             projectId,
-            userId,
+            demoTenantId,
             'Design Homepage',
             'Create mockup for the new homepage design',
             'in_progress',
-            'high'
+            'high',
+            userId
           ]);
 
           await pool.query(`
-            INSERT INTO tasks (id, tenant_id, project_id, assigned_user_id, title, description, status, priority) 
+            INSERT INTO tasks (id, project_id, tenant_id, title, description, status, priority, assigned_to) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
             task2Id,
-            demoTenantId,
             projectId,
-            userId,
+            demoTenantId,
             'Implement Login',
             'Build authentication system with JWT',
             'todo',
-            'medium'
+            'medium',
+            userId
           ]);
 
           await pool.query(`
-            INSERT INTO tasks (id, tenant_id, project_id, assigned_user_id, title, description, status, priority) 
+            INSERT INTO tasks (id, project_id, tenant_id, title, description, status, priority, assigned_to) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
             task3Id,
-            demoTenantId,
             projectId,
-            userId,
+            demoTenantId,
             'Database Setup',
             'Configure PostgreSQL database schema',
             'done',
-            'high'
+            'high',
+            userId
           ]);
 
           console.log('Sample tasks created successfully');

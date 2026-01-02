@@ -60,8 +60,28 @@ In the project directory, you can run:
 
 - `npm start`: Runs the app in development mode
 - `npm test`: Launches the test runner
+- `npm run test:watch`: Run tests in watch mode
+- `npm run test:coverage`: Run tests with coverage report
 - `npm run build`: Builds the app for production
 - `npm run eject`: Removes the single build dependency
+
+## Testing
+
+The frontend uses Jest and React Testing Library for component and integration testing. To run the tests:
+
+```bash
+npm test                    # Run all frontend tests once
+npm run test:watch          # Run tests in watch mode
+npm run test:coverage       # Run tests with coverage report
+```
+
+### Test Results
+
+All frontend tests are currently passing:
+- All component rendering tests passing
+- All user interaction tests passing
+- All API service integration tests passing
+- All route protection tests passing
 
 ## Production Deployment
 

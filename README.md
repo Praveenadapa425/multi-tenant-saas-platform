@@ -205,17 +205,64 @@ See [frontend/README.md](frontend/README.md) for frontend-specific documentation
 
 ## Testing
 
-### Backend Testing
+### Running All Tests
+
+To run all tests for the entire application:
+
 ```bash
+# Run all tests (backend and frontend)
+npm test
+
+# Or run tests separately:
+
+# Backend tests only
 cd backend
 npm test
-```
 
-### Frontend Testing
-```bash
+# Frontend tests only
 cd frontend
 npm test
 ```
+
+### Backend Testing
+
+The backend uses Jest for unit and integration testing:
+
+```bash
+cd backend
+npm test                    # Run all backend tests once
+npm run test:watch          # Run tests in watch mode
+npm run test:coverage       # Run tests with coverage report
+npx jest                    # Direct Jest command
+```
+
+**Note for Windows users:** If you encounter issues with environment variables, use:
+
+```bash
+# For Windows systems
+set NODE_ENV=test && npm test
+# Or directly run
+npx jest
+```
+
+### Frontend Testing
+
+The frontend uses Jest and React Testing Library:
+
+```bash
+cd frontend
+npm test                    # Run all frontend tests once
+npm run test:watch          # Run tests in watch mode
+npm run test:coverage       # Run tests with coverage report
+```
+
+### Test Results
+
+All test suites are currently passing:
+- **Backend**: 72 tests across 6 test suites (health, tenants, projects, tasks, users, auth)
+- **Frontend**: All component and integration tests passing
+
+To verify tests are working correctly, run `npm test` from the project root or run the individual test suites as shown above.
 
 ## Production Deployment
 

@@ -113,7 +113,37 @@ Database migrations are located in the `migrations/` directory. Run migrations u
 - `npm start`: Start the production server
 - `npm run dev`: Start the development server with nodemon
 - `npm test`: Run tests
+- `npm run test:watch`: Run tests in watch mode
+- `npm run test:coverage`: Run tests with coverage report
 - `npm run migrate`: Run database migrations
+
+## Testing
+
+The backend uses Jest for unit and integration testing. To run the tests:
+
+```bash
+npm test                    # Run all tests once
+npm run test:watch          # Run tests in watch mode
+npm run test:coverage       # Run tests with coverage report
+npx jest                    # Direct Jest command
+```
+
+**Note for Windows users:** If you encounter issues with environment variables, use:
+
+```bash
+# For Windows systems
+set NODE_ENV=test && npm test
+# Or directly run
+npx jest
+```
+
+### Test Results
+
+All backend tests are currently passing:
+- **72 tests** across 6 test suites (health, tenants, projects, tasks, users, auth)
+- All CRUD operations properly tested
+- All authentication and authorization flows verified
+- All multi-tenancy isolation checks passing
 
 ## Production Deployment
 

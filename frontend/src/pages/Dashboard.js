@@ -18,6 +18,8 @@ const Dashboard = () => {
   const [recentTasks, setRecentTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deletingProjectId, setDeletingProjectId] = useState(null);
+  const [deletingTaskId, setDeletingTaskId] = useState(null);
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -126,6 +128,42 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [user]);
 
+  const handleDeleteProject = async (projectId) => {
+    if (!window.confirm('Are you sure you want to delete this project? This will also delete all tasks in this project. This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      setDeletingProjectId(projectId);
+      await projectService.deleteProject(projectId);
+      await fetchDashboardData();
+      setError('');
+    } catch (err) {
+      setError('Failed to delete project');
+      console.error(err);
+    } finally {
+      setDeletingProjectId(null);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      setDeletingTaskId(taskId);
+      await taskService.deleteTask(taskId);
+      await fetchDashboardData();
+      setError('');
+    } catch (err) {
+      setError('Failed to delete task');
+      console.error(err);
+    } finally {
+      setDeletingTaskId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="dashboard-page">
@@ -207,9 +245,22 @@ const Dashboard = () => {
                     <h3>{project.name}</h3>
                     <p>{project.description}</p>
                   </div>
-                  <span className={`status status-${project.status}`}>
-                    {project.status}
-                  </span>
+                  <div className="item-actions">
+                    <span className={`status status-${project.status}`}>
+                      {project.status}
+                    </span>
+                    <button 
+                      className="btn btn-small btn-danger"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteProject(project.id);
+                      }}
+                      title="Delete Project"
+                      disabled={deletingProjectId === project.id}
+                    >
+                      {deletingProjectId === project.id ? 'Deleting...' : '🗑️'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -236,9 +287,22 @@ const Dashboard = () => {
                     <h3>{task.title}</h3>
                     <p>{task.description}</p>
                   </div>
-                  <span className={`status status-${task.status}`}>
-                    {task.status}
-                  </span>
+                  <div className="item-actions">
+                    <span className={`status status-${task.status}`}>
+                      {task.status}
+                    </span>
+                    <button 
+                      className="btn btn-small btn-danger"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteTask(task.id);
+                      }}
+                      title="Delete Task"
+                      disabled={deletingTaskId === task.id}
+                    >
+                      {deletingTaskId === task.id ? 'Deleting...' : '🗑️'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

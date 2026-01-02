@@ -25,6 +25,7 @@ const Projects = () => {
     priority: 'medium',
     dueDate: ''
   });
+  const [deletingProjectId, setDeletingProjectId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -93,6 +94,24 @@ const Projects = () => {
     } catch (err) {
       setError('Failed to create task');
       console.error(err);
+    }
+  };
+
+  const handleDeleteProject = async (projectId) => {
+    if (!window.confirm('Are you sure you want to delete this project? This will also delete all tasks in this project. This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      setDeletingProjectId(projectId);
+      await projectService.deleteProject(projectId);
+      await fetchProjects();
+      setError('');
+    } catch (err) {
+      setError('Failed to delete project');
+      console.error(err);
+    } finally {
+      setDeletingProjectId(null);
     }
   };
 
@@ -187,9 +206,22 @@ const Projects = () => {
             >
               <div className="project-header">
                 <h3>{project.name}</h3>
-                <span className={`status status-${project.status || 'active'}`}>
-                  {project.status || 'active'}
-                </span>
+                <div className="project-actions">
+                  <span className={`status status-${project.status || 'active'}`}>
+                    {project.status || 'active'}
+                  </span>
+                  <button 
+                    className="btn btn-small btn-danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteProject(project.id);
+                    }}
+                    title="Delete Project"
+                    disabled={deletingProjectId === project.id}
+                  >
+                    {deletingProjectId === project.id ? 'Deleting...' : '🗑️'}
+                  </button>
+                </div>
               </div>
               <p className="project-description">{project.description}</p>
               <div className="project-footer">

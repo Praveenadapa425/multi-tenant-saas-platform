@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await loginService({ email, password, tenantSubdomain });
+      const response = await loginService(email, password, tenantSubdomain);
       if (response.data.success) {
         setUser(response.data.data.user);
         setToken(response.data.data.token);

@@ -39,6 +39,16 @@ const superadminService = {
       console.error('Error updating tenant status:', error);
       throw error;
     }
+  },
+
+  deleteTenant: async (tenantId) => {
+    try {
+      const response = await api.delete(`/tenants/${tenantId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting tenant:', error);
+      throw error;
+    }
   }
 };
 

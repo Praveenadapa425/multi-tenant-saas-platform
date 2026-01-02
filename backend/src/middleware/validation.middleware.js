@@ -72,11 +72,20 @@ const userLoginValidation = [
   
   // For super_admin users, tenantSubdomain is optional, but for regular users it's required
   body('tenantSubdomain')
-    .optional()
-    .isLength({ min: 3, max: 63 })
-    .withMessage('Tenant subdomain must be between 3 and 63 characters')
-    .matches(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/)
-    .withMessage('Subdomain can only contain lowercase letters, numbers, and hyphens (cannot start or end with hyphen)'),
+    .custom((value, { req }) => {
+      // If the value is null, skip validation (for super_admin users)
+      if (value === null || value === undefined) {
+        return true;
+      }
+      // For non-null values, apply the regular validation
+      if (value.length < 3 || value.length > 63) {
+        throw new Error('Tenant subdomain must be between 3 and 63 characters');
+      }
+      if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(value)) {
+        throw new Error('Subdomain can only contain lowercase letters, numbers, and hyphens (cannot start or end with hyphen)');
+      }
+      return true;
+    }),
   
   handleValidationErrors
 ];

@@ -14,8 +14,23 @@ export function registerTenant(data) {
  * @param {Object} credentials - Login credentials
  * @returns {Promise} - Axios promise
  */
-export function login(credentials) {
-  return api.post('/auth/login', credentials);
+export function login(email, password, tenantSubdomain) {
+  // Create credentials object conditionally including tenantSubdomain only if provided
+  // For superadmin login, tenantSubdomain will be null
+  if (tenantSubdomain) {
+    // Include tenantSubdomain for regular user login
+    return api.post('/auth/login', {
+      email,
+      password,
+      tenantSubdomain
+    });
+  } else {
+    // Don't include tenantSubdomain for superadmin login
+    return api.post('/auth/login', {
+      email,
+      password
+    });
+  }
 }
 
 /**

@@ -354,15 +354,15 @@ const JWT_CONFIG = {
 const RATE_LIMIT_CONFIG = {
   GLOBAL: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // 100 requests per window
+    max: 2000 // 2000 requests per window
   },
   AUTH: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5 // 5 requests per window
+    max: 100 // 100 requests per window
   },
   API: {
     windowMs: 60 * 1000, // 1 minute
-    max: 30 // 30 requests per window
+    max: 500 // 500 requests per window
   }
 };
 

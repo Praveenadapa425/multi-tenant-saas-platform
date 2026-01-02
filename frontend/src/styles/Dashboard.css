@@ -176,7 +176,20 @@
   font-size: 0.85rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.item-actions .status {
   margin-left: 1rem;
+}
+
+.item-actions .btn {
+  flex-shrink: 0;
 }
 
 .status-pending {

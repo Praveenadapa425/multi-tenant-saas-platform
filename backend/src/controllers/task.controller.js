@@ -375,21 +375,50 @@ async function deleteTask(req, res) {
       });
     }
 
-    // Delete task
-    const deleteResult = await pool.query(
-      'DELETE FROM tasks WHERE id = $1 RETURNING id',
-      [taskId]
-    );
+    const task = taskResult.rows[0];
 
-    // Log action
-    await logAction({
-      tenantId: req.user.tenantId,
-      userId: req.user.id,
-      action: 'DELETE_TASK',
-      entityType: 'task',
-      entityId: taskId,
-      ipAddress: req.ip
-    });
+    // Authorization: Only super_admin, tenant_admin, or user assigned to the task can delete
+    // If task is not assigned to anyone, only super_admin or tenant_admin can delete
+    if (req.user.role !== 'super_admin' && req.user.role !== 'tenant_admin') {
+      // For regular users, they can only delete tasks assigned to them
+      if (task.assigned_to && task.assigned_to !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+    }
+
+    // Use a transaction to ensure data consistency
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Delete task
+      const deleteResult = await client.query(
+        'DELETE FROM tasks WHERE id = $1 RETURNING id',
+        [taskId]
+      );
+      
+      // Log action
+      await logAction({
+        tenantId: req.user.tenantId,
+        userId: req.user.id,
+        action: 'DELETE_TASK',
+        entityType: 'task',
+        entityId: taskId,
+        ipAddress: req.ip
+      }, client);
+      
+      await client.query('COMMIT');
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      logger.error('Error in delete task transaction', transactionError);
+      throw transactionError;
+    } finally {
+      client.release();
+    }
 
     res.status(200).json({
       success: true,

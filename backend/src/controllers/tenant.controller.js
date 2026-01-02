@@ -331,6 +331,91 @@ exports.getTenantStats = async (req, res) => {
 };
 
 /**
+ * Delete tenant
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
+exports.deleteTenant = async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const userId = req.user.id;
+
+    // Only super admins can delete tenants
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: ERROR_MESSAGES.FORBIDDEN
+      });
+    }
+
+    // Check if tenant exists
+    const tenantQuery = `SELECT id, name FROM tenants WHERE id = $1`;
+    const tenantResult = await pool.query(tenantQuery, [tenantId]);
+
+    if (tenantResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: ERROR_MESSAGES.RESOURCE_NOT_FOUND
+      });
+    }
+
+    const tenant = tenantResult.rows[0];
+
+    // Use a transaction to ensure data consistency
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Delete all related data in proper order due to foreign key constraints
+      // 1. Clear references to users in tasks (assigned_to)
+      await client.query('UPDATE tasks SET assigned_to = NULL WHERE tenant_id = $1', [tenantId]);
+      // 2. Clear references to users in projects (created_by)
+      await client.query('UPDATE projects SET created_by = NULL WHERE tenant_id = $1', [tenantId]);
+      // 3. Delete tasks
+      await client.query('DELETE FROM tasks WHERE tenant_id = $1', [tenantId]);
+      // 4. Delete projects
+      await client.query('DELETE FROM projects WHERE tenant_id = $1', [tenantId]);
+      // 5. Delete users
+      await client.query('DELETE FROM users WHERE tenant_id = $1', [tenantId]);
+      // 6. Delete tenant
+      await client.query('DELETE FROM tenants WHERE id = $1', [tenantId]);
+      
+      // Log action
+      await logAction({
+        tenantId: tenantId,
+        userId: userId,
+        action: 'DELETE_TENANT',
+        entityType: 'tenant',
+        entityId: tenantId,
+        ipAddress: req.ip
+      }, client);
+      
+      await client.query('COMMIT');
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      logger.error('Error in delete tenant transaction', transactionError);
+      throw transactionError;
+    } finally {
+      client.release();
+    }
+
+    logger.info('Tenant deleted', { tenantId, tenantName: tenant.name, deletedBy: userId });
+
+    res.status(200).json({
+      success: true,
+      message: 'Tenant and all related data deleted successfully'
+    });
+  } catch (error) {
+    logger.error('Error deleting tenant', error);
+    res.status(500).json({
+      success: false,
+      message: ERROR_MESSAGES.INTERNAL_ERROR
+    });
+  }
+};
+
+/**
  * Get all users in tenant
  * @param {Object} req - Request object
  * @param {Object} res - Response object

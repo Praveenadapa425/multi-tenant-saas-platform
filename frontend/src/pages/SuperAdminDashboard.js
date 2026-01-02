@@ -13,6 +13,7 @@ const SuperAdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('stats'); // 'stats', 'tenants', 'users', 'projects'
   const [error, setError] = useState('');
+  const [deletingTenantId, setDeletingTenantId] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,6 +42,38 @@ const SuperAdminDashboard = () => {
       fetchData();
     }
   }, [user]);
+
+  const handleDeleteTenant = async (tenantId) => {
+    if (!window.confirm('Are you sure you want to delete this tenant? This will permanently delete all data associated with this tenant including users, projects, and tasks. This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      setDeletingTenantId(tenantId);
+      const deleteResult = await superadminService.deleteTenant(tenantId);
+      
+      if (!deleteResult.success) {
+        setError(deleteResult.message || 'Failed to delete tenant');
+        console.error('Tenant deletion failed:', deleteResult);
+        return;
+      }
+      
+      // Refresh the tenants list
+      const tenantsRes = await superadminService.getAllTenants({ limit: 10 });
+      if (tenantsRes.success) {
+        setTenants(tenantsRes.data);
+        setError('');
+      } else {
+        setError('Tenant deleted but failed to refresh tenant list');
+        console.error('Failed to refresh tenant list:', tenantsRes);
+      }
+    } catch (err) {
+      setError('Failed to delete tenant: ' + (err.response?.data?.message || err.message || 'Unknown error'));
+      console.error('Error deleting tenant:', err);
+    } finally {
+      setDeletingTenantId(null);
+    }
+  };
 
   if (user?.role !== 'super_admin') {
     return (
@@ -139,8 +172,21 @@ const SuperAdminDashboard = () => {
                         </span></p>
                         <p>Plan: {tenant.subscription_plan}</p>
                       </div>
-                      <div className="item-meta">
-                        <p>Created: {new Date(tenant.created_at).toLocaleDateString()}</p>
+                      <div className="item-actions">
+                        <div className="item-meta">
+                          <p>Created: {new Date(tenant.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <button 
+                          className="btn btn-small btn-danger"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTenant(tenant.id);
+                          }}
+                          title="Delete Tenant"
+                          disabled={deletingTenantId === tenant.id}
+                        >
+                          {deletingTenantId === tenant.id ? 'Deleting...' : '🗑️'}
+                        </button>
                       </div>
                     </div>
                   ))}

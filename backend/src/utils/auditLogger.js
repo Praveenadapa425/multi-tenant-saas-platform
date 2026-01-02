@@ -10,7 +10,7 @@ const { pool } = require('../config/database');
  * @param {string} params.entityId - ID of entity affected
  * @param {string} params.ipAddress - IP address of requester
  */
-async function logAction({ tenantId, userId, action, entityType, entityId, ipAddress }) {
+async function logAction({ tenantId, userId, action, entityType, entityId, ipAddress }, client = null) {
   try {
     const query = `
       INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, ip_address)
@@ -20,7 +20,8 @@ async function logAction({ tenantId, userId, action, entityType, entityId, ipAdd
     
     const values = [tenantId, userId, action, entityType, entityId, ipAddress];
     
-    const result = await pool.query(query, values);
+    // Use provided client for transactions, otherwise use pool
+    const result = client ? await client.query(query, values) : await pool.query(query, values);
     return result.rows[0];
   } catch (error) {
     console.error('Error logging action:', error);

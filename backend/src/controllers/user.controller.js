@@ -410,21 +410,45 @@ exports.deleteUser = async (req, res) => {
       });
     }
     
-    // Unassign tasks first
-    await pool.query(
-      'UPDATE tasks SET assigned_to = NULL WHERE assigned_to = $1',
-      [userId]
-    );
+    // Use a transaction to ensure data consistency
+    const client = await pool.connect();
     
-    // Delete user
-    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-    
-    // Log action
-    await pool.query(
-      `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, ip_address)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userTenantId, req.user.id, 'DELETE_USER', 'user', userId, req.ip]
-    );
+    try {
+      await client.query('BEGIN');
+      
+      // Unassign tasks first
+      await client.query(
+        'UPDATE tasks SET assigned_to = NULL WHERE assigned_to = $1',
+        [userId]
+      );
+      
+      // Handle projects created by this user - set to NULL (allowed by DB constraint)
+      await client.query(
+        'UPDATE projects SET created_by = NULL WHERE created_by = $1',
+        [userId]
+      );
+      
+      // Delete user
+      await client.query('DELETE FROM users WHERE id = $1', [userId]);
+      
+      // Log action
+      await logAction({
+        tenantId: userTenantId,
+        userId: req.user.id,
+        action: 'DELETE_USER',
+        entityType: 'user',
+        entityId: userId,
+        ipAddress: req.ip
+      }, client);
+      
+      await client.query('COMMIT');
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      logger.error('Error in delete user transaction', transactionError);
+      throw transactionError;
+    } finally {
+      client.release();
+    }
     
     res.status(200).json({
       success: true,

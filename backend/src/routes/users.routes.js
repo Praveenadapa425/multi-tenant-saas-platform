@@ -22,6 +22,6 @@ router.put('/:userId', authenticate, userController.updateUser);
 
 // Delete User
 // DELETE /api/users/:userId
-router.delete('/:userId', authenticate, authorize('tenant_admin'), userController.deleteUser);
+router.delete('/:userId', authenticate, authorize('tenant_admin', 'super_admin'), userController.deleteUser);
 
 module.exports = router;

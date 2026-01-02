@@ -18,6 +18,8 @@ const ProjectDetails = () => {
     priority: 'medium',
     status: 'pending'
   });
+  const [deletingTaskId, setDeletingTaskId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -72,6 +74,24 @@ const ProjectDetails = () => {
     } catch (err) {
       setError('Failed to create task');
       console.error(err);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      setDeletingTaskId(taskId);
+      await taskService.deleteTask(taskId);
+      await fetchData();
+      setError('');
+    } catch (err) {
+      setError('Failed to delete task');
+      console.error(err);
+    } finally {
+      setDeletingTaskId(null);
     }
   };
 
@@ -208,9 +228,22 @@ const ProjectDetails = () => {
               <div key={task.id} className="task-card">
                 <div className="task-header">
                   <h3>{task.title}</h3>
-                  <span className={`priority priority-${task.priority || 'medium'}`}>
-                    {task.priority || 'medium'}
-                  </span>
+                  <div className="task-actions">
+                    <span className={`priority priority-${task.priority || 'medium'}`}>
+                      {task.priority || 'medium'}
+                    </span>
+                    <button 
+                      className="btn btn-small btn-danger"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteTask(task.id);
+                      }}
+                      title="Delete Task"
+                      disabled={deletingTaskId === task.id}
+                    >
+                      {deletingTaskId === task.id ? 'Deleting...' : '🗑️'}
+                    </button>
+                  </div>
                 </div>
                 {task.description && (
                   <p className="task-description">{task.description}</p>

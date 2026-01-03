@@ -53,18 +53,25 @@ On container startup, migrations and seed data are automatically executed. The s
 - Email: superadmin@system.com
 - Password: Admin@123
 - Role: super_admin
+- Tenant: None (system level)
 
 **Tenant Admin** (for demo tenant):
 - Email: admin@demo.com
 - Password: Demo@123
 - Role: tenant_admin
-- Tenant: Demo Organization
+- Tenant: Demo Company
 
-**Demo User** (for demo tenant):
-- Email: user@demo.com
-- Password: User@123
-- Role: user
-- Tenant: Demo Organization
+**Demo Users** (for demo tenant):
+- User 1:
+  - Email: user1@demo.com
+  - Password: User@123
+  - Role: user
+  - Tenant: Demo Company
+- User 2:
+  - Email: user2@demo.com
+  - Password: User@123
+  - Role: user
+  - Tenant: Demo Company
 
 - Sample Projects and Tasks for demonstration
 

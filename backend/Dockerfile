@@ -16,7 +16,8 @@ RUN npm ci --only=production
 # Copy application code
 COPY . .
 
-# Create entrypoint script
+# Ensure proper line endings and permissions for entrypoint script
+RUN sed -i 's/\r$//' ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 # Expose port
